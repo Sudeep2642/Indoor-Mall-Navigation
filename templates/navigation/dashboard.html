@@ -1,0 +1,46 @@
+{% extends 'navigation/base.html' %}
+{% block title %}Dashboard — MallNav{% endblock %}
+{% block content %}
+<div class="container page">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800">Dashboard</h1>
+      <p style="color:var(--muted);font-size:.875rem;margin-top:.2rem">Manage malls, locations, connections and QR codes.</p>
+    </div>
+    <a href="/dashboard/mall/add/" class="btn btn-primary">+ Add Mall</a>
+  </div>
+
+  <div class="grid-3" style="margin-bottom:1.5rem">
+    <div class="card stat-box"><div class="stat-num">{{ total_malls }}</div><div class="stat-lbl">Malls</div></div>
+    <div class="card stat-box"><div class="stat-num">{{ total_scans }}</div><div class="stat-lbl">QR Scans</div></div>
+    <div class="card stat-box"><div class="stat-num">{{ malls|length }}</div><div class="stat-lbl">Active</div></div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="padding:1rem 1.5rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div class="card-title">Your Malls</div>
+      <a href="/dashboard/mall/add/" class="btn btn-primary btn-sm">+ New Mall</a>
+    </div>
+    <table>
+      <thead><tr><th>Mall</th><th>City</th><th>Floors</th><th>Locations</th><th>Scans</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for mall in malls %}
+      <tr>
+        <td><strong>{{ mall.name }}</strong></td>
+        <td>{{ mall.city }}</td>
+        <td><span class="badge badge-primary">{{ mall.total_floors }}</span></td>
+        <td>{{ mall.loc_count }}</td>
+        <td>{{ mall.scan_count }}</td>
+        <td style="display:flex;gap:.4rem;flex-wrap:wrap">
+          <a href="/navigate/{{ mall.slug }}/" class="btn btn-ghost btn-sm" target="_blank">🗺 View</a>
+          <a href="/dashboard/{{ mall.slug }}/" class="btn btn-primary btn-sm">⚙ Manage</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2rem">No malls yet. <a href="/dashboard/mall/add/">Add one →</a></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

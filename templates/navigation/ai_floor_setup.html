@@ -1,0 +1,855 @@
+{% extends 'navigation/base.html' %}
+{% block title %}AI Floor Setup — {{ floor.label }} — {{ mall.name }}{% endblock %}
+{% block content %}
+<style>
+:root{
+  --bg:#0b0c14;--surf:#13141f;--card:#1c1d2e;--card2:#22243a;
+  --border:rgba(255,255,255,.08);--primary:#6c63ff;
+  --green:#00e676;--orange:#ff6b35;--yellow:#ffc107;--blue:#29b6f6;--red:#ef5350;
+  --text:#eeeeff;--muted:#7b7d9e;
+}
+
+/* ── LAYOUT ── */
+.ai-wrap{display:grid;grid-template-columns:340px 1fr;gap:0;height:calc(100vh - 58px);overflow:hidden}
+@media(max-width:900px){.ai-wrap{grid-template-columns:1fr;grid-template-rows:auto 1fr}}
+
+/* ── LEFT PANEL ── */
+.ai-panel{
+  background:var(--surf);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.ai-panel-head{
+  padding:1rem 1.25rem .75rem;border-bottom:1px solid var(--border);flex-shrink:0
+}
+.ai-panel-head h2{font-size:1rem;font-weight:700;margin-bottom:.15rem}
+.ai-panel-head p{font-size:.75rem;color:var(--muted);line-height:1.5}
+.ai-panel-scroll{flex:1;overflow-y:auto;padding:1rem 1.25rem}
+.ai-panel-scroll::-webkit-scrollbar{width:3px}
+.ai-panel-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+
+/* Steps */
+.step-pill{
+  display:flex;align-items:center;gap:.5rem;
+  padding:.35rem .75rem;border-radius:20px;font-size:.72rem;font-weight:700;
+  margin-bottom:1rem;width:fit-content;
+}
+.step-pill.active{background:rgba(108,99,255,.2);color:#a5b4fc;border:1px solid rgba(108,99,255,.3)}
+.step-pill.done{background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.25)}
+.step-pill.waiting{background:rgba(255,255,255,.05);color:var(--muted);border:1px solid var(--border)}
+
+.section-label{font-size:.63rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin-bottom:.5rem}
+
+/* API key input */
+.api-row{display:flex;gap:.5rem;margin-bottom:1rem;align-items:flex-start}
+.api-inp{
+  flex:1;padding:.6rem .75rem;background:var(--card);
+  border:1.5px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:.82rem;font-family:monospace;
+}
+.api-inp:focus{outline:none;border-color:var(--primary)}
+.api-inp::placeholder{color:var(--muted);font-family:'Segoe UI',sans-serif}
+
+/* Image upload zone */
+.upload-zone{
+  border:2px dashed rgba(108,99,255,.35);border-radius:12px;
+  padding:1.5rem;text-align:center;cursor:pointer;
+  transition:all .2s;margin-bottom:1rem;background:rgba(108,99,255,.04);
+  position:relative;overflow:hidden;
+}
+.upload-zone:hover{border-color:var(--primary);background:rgba(108,99,255,.08)}
+.upload-zone.has-file{border-color:var(--green);background:rgba(0,230,118,.05);border-style:solid}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.uz-icon{font-size:1.8rem;margin-bottom:.4rem}
+.uz-txt{font-size:.8rem;color:var(--muted);line-height:1.5}
+.uz-file{font-size:.78rem;font-weight:600;color:var(--green);margin-top:.3rem}
+
+/* Analyse button */
+.btn-analyse{
+  width:100%;padding:.75rem;border-radius:10px;border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--primary),#a855f7);
+  color:#fff;font-weight:700;font-size:.88rem;
+  display:flex;align-items:center;justify-content:center;gap:.5rem;
+  transition:opacity .2s,transform .15s;margin-bottom:1rem;
+}
+.btn-analyse:hover{opacity:.9}
+.btn-analyse:active{transform:scale(.98)}
+.btn-analyse:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* Progress */
+#progress-box{display:none;margin-bottom:1rem}
+.prog-bar-wrap{height:6px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden;margin:.5rem 0}
+.prog-bar{height:100%;background:linear-gradient(90deg,var(--primary),#a855f7);border-radius:3px;transition:width .4s ease;width:0}
+.prog-label{font-size:.75rem;color:var(--muted)}
+
+/* Results list */
+#results-panel{display:none}
+.result-count{
+  background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);
+  border-radius:8px;padding:.6rem .875rem;font-size:.82rem;
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:.75rem;
+}
+.loc-item{
+  background:var(--card);border:1px solid var(--border);border-radius:9px;
+  padding:.65rem .875rem;margin-bottom:.45rem;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;gap:.65rem;
+}
+.loc-item:hover{border-color:rgba(108,99,255,.4);background:rgba(108,99,255,.07)}
+.loc-item.selected{border-color:var(--primary);background:rgba(108,99,255,.12)}
+.loc-item.skipped{opacity:.4;text-decoration:line-through}
+.li-ico{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0}
+.li-name{font-size:.82rem;font-weight:600;flex:1}
+.li-type{font-size:.62rem;color:var(--muted);margin-top:.05rem}
+.li-skip{background:none;border:none;cursor:pointer;color:var(--muted);font-size:.8rem;padding:.1rem .35rem;border-radius:4px;flex-shrink:0}
+.li-skip:hover{color:var(--red)}
+
+/* Add manual section */
+#manual-section{
+  margin-top:1rem;padding-top:1rem;
+  border-top:1px solid var(--border);
+}
+.manual-form{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:.875rem;margin-bottom:.75rem;display:none;
+}
+.manual-form.open{display:block}
+.mf-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem}
+.mf-inp{
+  padding:.55rem .65rem;background:var(--card2);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:.8rem;width:100%;
+}
+.mf-inp:focus{outline:none;border-color:var(--primary)}
+.mf-inp::placeholder{color:var(--muted)}
+select.mf-inp{cursor:pointer}
+.xy-hint{font-size:.68rem;color:var(--muted);margin-bottom:.4rem;display:flex;align-items:center;gap:.3rem}
+.xy-hint .chip{background:rgba(108,99,255,.15);color:#a5b4fc;padding:.1rem .4rem;border-radius:4px;font-size:.65rem;font-family:monospace}
+
+/* Save bar */
+#save-bar{
+  padding:1rem 1.25rem;border-top:1px solid var(--border);
+  display:none;flex-shrink:0;
+}
+.save-row{display:flex;gap:.5rem}
+.btn-save{
+  flex:1;padding:.7rem;border-radius:8px;border:none;cursor:pointer;
+  background:var(--green);color:#000;font-weight:700;font-size:.85rem;
+  transition:opacity .15s;
+}
+.btn-save:hover{opacity:.85}
+.btn-save:disabled{opacity:.4;cursor:not-allowed}
+.btn-cancel{padding:.7rem 1rem;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-size:.85rem}
+.btn-cancel:hover{color:var(--text);border-color:var(--muted)}
+
+/* ── MAP AREA ── */
+.ai-map{
+  position:relative;overflow:hidden;background:var(--bg);
+  display:flex;flex-direction:column;
+}
+.map-toolbar{
+  flex-shrink:0;padding:.5rem .875rem;background:var(--surf);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;
+}
+.map-toolbar .tb-label{font-size:.72rem;color:var(--muted)}
+.mode-btn{
+  padding:.32rem .75rem;border-radius:6px;border:1.5px solid var(--border);
+  background:none;color:var(--muted);font-size:.75rem;cursor:pointer;transition:all .15s;
+}
+.mode-btn.active{background:rgba(108,99,255,.2);border-color:var(--primary);color:#a5b4fc}
+.mode-btn:hover:not(.active){border-color:rgba(255,255,255,.2);color:var(--text)}
+
+.map-canvas-wrap{flex:1;position:relative;overflow:hidden;cursor:crosshair}
+canvas#mapCv{display:block;width:100%;height:100%}
+
+/* Tooltip */
+#cv-tooltip{
+  position:absolute;background:var(--card2);border:1px solid var(--border);
+  border-radius:8px;padding:.4rem .65rem;font-size:.75rem;pointer-events:none;
+  opacity:0;transition:opacity .15s;z-index:10;white-space:nowrap;
+}
+
+/* Coord readout */
+#coord-read{
+  position:absolute;bottom:.75rem;left:.75rem;
+  background:rgba(19,20,31,.85);border:1px solid var(--border);
+  padding:.3rem .65rem;border-radius:20px;font-size:.7rem;color:var(--muted);
+  font-family:monospace;pointer-events:none;
+}
+
+/* Error / success */
+.alert{border-radius:8px;padding:.65rem .875rem;font-size:.8rem;margin-bottom:.75rem}
+.alert-err{background:rgba(239,83,80,.1);border:1px solid rgba(239,83,80,.3);color:#ef9a9a}
+.alert-ok{background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.25);color:var(--green)}
+</style>
+
+<div class="ai-wrap">
+
+  <!-- ════ LEFT PANEL ════ -->
+  <div class="ai-panel">
+    <div class="ai-panel-head">
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:.35rem">
+        <a href="/dashboard/">Dashboard</a> › <a href="/dashboard/{{ mall.slug }}/">{{ mall.name }}</a> › AI Floor Setup
+      </div>
+      <h2>🤖 AI Floor Setup — {{ floor.label }}</h2>
+      <p>Upload your floor map image. Claude Vision will detect shops, corridors, lifts and place them automatically. You can then add any missed small vendors by clicking on the map.</p>
+    </div>
+
+    <div class="ai-panel-scroll" id="panel-scroll">
+
+      <!-- STEP 1: API KEY -->
+      <div id="step1">
+        <div class="step-pill active" id="pill1">① API Key</div>
+        <div class="section-label">Anthropic API Key</div>
+        <div class="api-row">
+          <input type="password" class="api-inp" id="api-key"
+            placeholder="sk-ant-api03-..."
+            title="Get your key at console.anthropic.com">
+        </div>
+        <div style="font-size:.7rem;color:var(--muted);margin-bottom:1rem;line-height:1.6">
+          🔒 Key is sent directly to Anthropic's API and never stored.<br>
+          Get a free key at <strong style="color:#a5b4fc">console.anthropic.com</strong>
+        </div>
+
+        <!-- STEP 2: IMAGE -->
+        <div class="step-pill waiting" id="pill2">② Floor Map Image</div>
+        <div class="section-label">Upload Floor Plan</div>
+
+        {% if floor.map_image %}
+        <div style="background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.2);border-radius:9px;padding:.65rem .875rem;font-size:.78rem;color:var(--green);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem">
+          <span>✅</span>
+          <div>Floor map already uploaded — will be used for analysis.<br>
+          <span style="color:var(--muted)">Or upload a different one below.</span></div>
+        </div>
+        {% endif %}
+
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="img-file" accept="image/*" onchange="onFileChange(this)">
+          <div class="uz-icon">🗺️</div>
+          <div class="uz-txt">Drop your floor plan image here<br>or click to browse</div>
+          <div class="uz-file" id="uz-fname">{% if floor.map_image %}Using existing floor map{% endif %}</div>
+        </div>
+
+        <div id="err-box" class="alert alert-err" style="display:none"></div>
+
+        <button class="btn-analyse" id="analyse-btn" onclick="runAnalysis()">
+          🤖 Analyse Floor Map with AI
+        </button>
+
+        <div id="progress-box">
+          <div class="prog-label" id="prog-label">Sending image to Claude...</div>
+          <div class="prog-bar-wrap"><div class="prog-bar" id="prog-bar"></div></div>
+        </div>
+      </div>
+
+      <!-- STEP 3: RESULTS -->
+      <div id="results-panel">
+        <div class="step-pill done" id="pill3">③ Review & Edit Detected Locations</div>
+
+        <div class="result-count">
+          <span>🎯 <span id="det-count">0</span> locations detected</span>
+          <span style="font-size:.7rem;color:var(--muted)">click to select on map</span>
+        </div>
+
+        <div id="loc-list"></div>
+
+        <!-- MANUAL ADD -->
+        <div id="manual-section">
+          <div class="section-label">Add a missed location</div>
+          <button class="mode-btn active" id="manual-add-btn" onclick="toggleManualForm()" style="margin-bottom:.6rem;width:100%;justify-content:center;display:flex">
+            + Click map to place, then fill details
+          </button>
+
+          <div class="manual-form" id="manual-form">
+            <div class="xy-hint">
+              📍 Click anywhere on the map to set position.
+              Current: <span class="chip" id="xy-display">X: — Y: —</span>
+            </div>
+            <div class="mf-grid">
+              <input class="mf-inp" id="m-name" placeholder="Shop name *" style="grid-column:1/-1">
+              <select class="mf-inp" id="m-type">
+                <option value="shop">🛍️ Shop / Store</option>
+                <option value="restaurant">🍽️ Restaurant / Food</option>
+                <option value="restroom">🚻 Restroom</option>
+                <option value="lift">🛗 Lift / Elevator</option>
+                <option value="escalator">↗️ Escalator</option>
+                <option value="stairs">🪜 Stairs</option>
+                <option value="entrance">🚪 Entrance / Exit</option>
+                <option value="atm">💳 ATM</option>
+                <option value="parking">🅿️ Parking</option>
+                <option value="info">ℹ️ Info Desk</option>
+                <option value="emergency">🚨 Emergency Exit</option>
+                <option value="junction">🔀 Junction (corridor node)</option>
+              </select>
+              <input class="mf-inp" id="m-x" type="number" placeholder="X %" min="0" max="100" step="0.5" readonly style="cursor:not-allowed">
+              <input class="mf-inp" id="m-y" type="number" placeholder="Y %" min="0" max="100" step="0.5" readonly style="cursor:not-allowed">
+            </div>
+            <div style="display:flex;gap:.5rem">
+              <button onclick="addManualLoc()" style="flex:1;padding:.5rem;border-radius:7px;border:none;background:var(--primary);color:#fff;font-weight:700;cursor:pointer;font-size:.8rem">Add to Map</button>
+              <button onclick="cancelManual()" style="padding:.5rem .875rem;border-radius:7px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-size:.8rem">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /panel-scroll -->
+
+    <!-- SAVE BAR -->
+    <div id="save-bar">
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:.6rem">
+        <span id="save-summary">Ready to save</span>
+      </div>
+      <div class="save-row">
+        <button class="btn-save" id="save-btn" onclick="saveAll()">
+          ✅ Save All to Database
+        </button>
+        <button class="btn-cancel" onclick="window.location='/dashboard/{{ mall.slug }}/'">Discard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ MAP AREA ════ -->
+  <div class="ai-map">
+    <div class="map-toolbar">
+      <span class="tb-label">Map Preview</span>
+      <button class="mode-btn active" id="mode-view" onclick="setMode('view')">👁 View</button>
+      <button class="mode-btn" id="mode-place" onclick="setMode('place')">📍 Click to Place</button>
+      <button class="mode-btn" id="mode-edge" onclick="setMode('edge')">🔗 Draw Edge</button>
+      <span style="margin-left:auto;font-size:.7rem;color:var(--muted)">{{ floor.label }} · {{ mall.name }}</span>
+    </div>
+
+    <div class="map-canvas-wrap" id="cv-wrap">
+      <canvas id="mapCv"></canvas>
+      <div id="cv-tooltip"></div>
+      <div id="coord-read">X: — Y: —</div>
+    </div>
+  </div>
+
+</div><!-- /ai-wrap -->
+
+<script>
+const FLOOR_ID   = {{ floor.id }};
+const MALL_SLUG  = "{{ mall.slug }}";
+const FLOOR_LABEL= "{{ floor.label }}";
+const FLOOR_IMG  = "{{ floor.map_image.url|default:'' }}";
+const CSRF       = "{{ csrf_token }}";
+
+// ── STATE ──
+let locations  = [];   // {name,type,x_pct,y_pct,description,manual,skip,id}
+let edges      = [];   // {from,to,walk_type} — indices into locations[]
+let selIdx     = -1;   // selected location index
+let edgeFrom   = -1;   // first selected loc for edge drawing
+let mode       = 'view'; // 'view' | 'place' | 'edge'
+let pendingXY  = null;  // {x,y} for manual placement
+
+// Canvas
+const cv  = document.getElementById('mapCv');
+const ctx = cv.getContext('2d');
+let bgImg = null;
+let scale = 1, panX = 0, panY = 0;
+let isPan = false, lastPan = {x:0,y:0};
+
+// ── INIT ──
+function init() {
+  resize();
+  if (FLOOR_IMG) loadBg(FLOOR_IMG);
+}
+window.addEventListener('resize', resize);
+init();
+
+function loadBg(url) {
+  bgImg = new Image();
+  bgImg.onload = redraw;
+  bgImg.src = url;
+}
+
+function resize() {
+  const w = document.getElementById('cv-wrap');
+  cv.width  = w.clientWidth;
+  cv.height = w.clientHeight;
+  redraw();
+}
+
+// ── FILE UPLOAD ──
+function onFileChange(inp) {
+  if (!inp.files[0]) return;
+  const f = inp.files[0];
+  document.getElementById('uz-fname').textContent = f.name;
+  document.getElementById('upload-zone').classList.add('has-file');
+  const reader = new FileReader();
+  reader.onload = e => { loadBg(e.target.result); };
+  reader.readAsDataURL(f);
+}
+
+// ── ANALYSE ──
+async function runAnalysis() {
+  const key = document.getElementById('api-key').value.trim();
+  if (!key) { showErr('Please enter your Anthropic API key first.'); return; }
+
+  const fileInput = document.getElementById('img-file');
+  const hasFile   = fileInput.files[0];
+  const hasExisting = FLOOR_IMG !== '';
+
+  if (!hasFile && !hasExisting) {
+    showErr('Please upload a floor map image first.');
+    return;
+  }
+
+  hideErr();
+  const btn = document.getElementById('analyse-btn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Analysing...';
+  showProgress(0, 'Uploading image to Claude Vision...');
+
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', CSRF);
+  fd.append('api_key', key);
+  if (hasFile) fd.append('image', fileInput.files[0]);
+
+  showProgress(20, 'Image sent. Claude is reading your floor plan...');
+
+  try {
+    const resp = await fetch(`/dashboard/floor/${FLOOR_ID}/ai-analyse/`, {
+      method: 'POST',
+      body: fd
+    });
+    showProgress(75, 'Processing AI response...');
+    const data = await resp.json();
+    showProgress(100, 'Done!');
+
+    if (!data.ok) {
+      showErr('AI Error: ' + data.error);
+      btn.disabled = false;
+      btn.innerHTML = '🤖 Analyse Floor Map with AI';
+      hideProgress();
+      return;
+    }
+
+    setTimeout(() => {
+      hideProgress();
+      loadResults(data.data);
+      btn.disabled = false;
+      btn.innerHTML = '🔄 Re-analyse';
+    }, 600);
+
+  } catch(e) {
+    showErr('Network error: ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = '🤖 Analyse Floor Map with AI';
+    hideProgress();
+  }
+}
+
+function loadResults(data) {
+  // Convert detected locations
+  locations = (data.locations || []).map((l, i) => ({
+    ...l, id: i, skip: false, manual: false
+  }));
+  edges = (data.edges || []).map(e => ({
+    from: e.from, to: e.to, walk_type: e.walk_type || 'walk'
+  }));
+
+  renderLocList();
+  document.getElementById('results-panel').style.display = 'block';
+  document.getElementById('save-bar').style.display = 'block';
+  document.getElementById('pill2').className = 'step-pill done';
+  document.getElementById('step1').querySelector('.step-pill').className = 'step-pill done';
+  updateSaveSummary();
+  redraw();
+
+  // Scroll to results
+  document.getElementById('panel-scroll').scrollTo({top: 9999, behavior: 'smooth'});
+}
+
+// ── LOC LIST ──
+function renderLocList() {
+  const active = locations.filter(l => !l.skip);
+  document.getElementById('det-count').textContent = active.length;
+
+  const html = locations.map((l, i) => `
+    <div class="loc-item ${l.skip?'skipped':''} ${selIdx===i?'selected':''}"
+         id="li-${i}" onclick="selectLoc(${i})">
+      <div class="li-ico" style="background:${tC(l.type)}22">${tE(l.type)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="li-name">${l.name}</div>
+        <div class="li-type">${l.type} · X:${Math.round(l.x_pct)} Y:${Math.round(l.y_pct)}</div>
+      </div>
+      <button class="li-skip" title="${l.skip?'Restore':'Remove'}"
+        onclick="event.stopPropagation();toggleSkip(${i})">${l.skip?'↩':'✕'}</button>
+    </div>`).join('');
+  document.getElementById('loc-list').innerHTML = html;
+}
+
+function selectLoc(i) {
+  if (mode === 'edge') {
+    handleEdgeClick(i); return;
+  }
+  selIdx = selIdx === i ? -1 : i;
+  renderLocList();
+  redraw();
+  if (selIdx >= 0) {
+    document.getElementById(`li-${i}`)?.scrollIntoView({block:'nearest'});
+  }
+}
+
+function toggleSkip(i) {
+  locations[i].skip = !locations[i].skip;
+  if (selIdx === i) selIdx = -1;
+  renderLocList();
+  updateSaveSummary();
+  redraw();
+}
+
+function updateSaveSummary() {
+  const keep = locations.filter(l => !l.skip).length;
+  const edgeCount = edges.length;
+  document.getElementById('save-summary').textContent =
+    `${keep} locations + ${edgeCount} connections will be saved to database`;
+}
+
+// ── MANUAL ADD ──
+let manualOpen = false;
+function toggleManualForm() {
+  manualOpen = !manualOpen;
+  document.getElementById('manual-form').classList.toggle('open', manualOpen);
+  if (manualOpen) { setMode('place'); } else { setMode('view'); }
+}
+function cancelManual() {
+  manualOpen = false;
+  pendingXY = null;
+  document.getElementById('manual-form').classList.remove('open');
+  document.getElementById('xy-display').textContent = 'X: — Y: —';
+  setMode('view');
+  redraw();
+}
+
+function addManualLoc() {
+  const name = document.getElementById('m-name').value.trim();
+  const x = parseFloat(document.getElementById('m-x').value);
+  const y = parseFloat(document.getElementById('m-y').value);
+
+  if (!name) { alert('Please enter a location name'); return; }
+  if (isNaN(x) || isNaN(y)) { alert('Click on the map to set the position first'); return; }
+
+  const loc = {
+    name, type: document.getElementById('m-type').value,
+    x_pct: x, y_pct: y, description: '', manual: true, skip: false,
+    id: locations.length
+  };
+  locations.push(loc);
+  selIdx = locations.length - 1;
+  pendingXY = null;
+
+  // Reset form
+  document.getElementById('m-name').value = '';
+  document.getElementById('m-x').value = '';
+  document.getElementById('m-y').value = '';
+  document.getElementById('xy-display').textContent = 'X: — Y: —';
+
+  renderLocList();
+  updateSaveSummary();
+  redraw();
+
+  document.getElementById('results-panel').style.display = 'block';
+  document.getElementById('save-bar').style.display = 'block';
+
+  // Scroll list to bottom
+  document.getElementById('panel-scroll').scrollTo({top:9999});
+}
+
+// ── EDGE DRAWING ──
+function handleEdgeClick(i) {
+  if (locations[i].skip) return;
+  if (edgeFrom === -1) {
+    edgeFrom = i;
+    toast(`Edge from: ${locations[i].name} — now click destination`);
+  } else if (edgeFrom !== i) {
+    // Add edge if not already exists
+    const exists = edges.some(e =>
+      (e.from === edgeFrom && e.to === i) || (e.from === i && e.to === edgeFrom));
+    if (!exists) {
+      edges.push({from: edgeFrom, to: i, walk_type: 'walk'});
+      updateSaveSummary();
+      toast(`✅ Edge: ${locations[edgeFrom].name} ↔ ${locations[i].name}`);
+    } else {
+      toast('Edge already exists');
+    }
+    edgeFrom = -1;
+  } else {
+    edgeFrom = -1;
+  }
+  renderLocList();
+  redraw();
+}
+
+// ── MODE ──
+function setMode(m) {
+  mode = m;
+  if (m !== 'edge') edgeFrom = -1;
+  if (m !== 'place') { pendingXY = null; }
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('mode-' + m)?.classList.add('active');
+
+  const wrap = document.getElementById('cv-wrap');
+  wrap.style.cursor = m === 'place' ? 'crosshair' :
+                      m === 'edge'  ? 'cell' : 'grab';
+  redraw();
+}
+
+// ── CANVAS INTERACTION ──
+cv.addEventListener('mousedown', e => {
+  if (mode === 'view') { isPan=true; lastPan={x:e.clientX,y:e.clientY}; cv.style.cursor='grabbing'; }
+});
+cv.addEventListener('mousemove', e => {
+  const {wx,wy} = screenToWorld(e);
+  const xp = Math.max(0,Math.min(100, wx/cv.width*100)).toFixed(1);
+  const yp = Math.max(0,Math.min(100, wy/cv.height*100)).toFixed(1);
+  document.getElementById('coord-read').textContent = `X: ${xp}%  Y: ${yp}%`;
+
+  if (isPan && mode === 'view') {
+    panX += e.clientX - lastPan.x; panY += e.clientY - lastPan.y;
+    lastPan = {x:e.clientX, y:e.clientY};
+    redraw();
+  }
+
+  // Tooltip on hover
+  const hit = hitTest(wx, wy);
+  const tt = document.getElementById('cv-tooltip');
+  if (hit >= 0 && !locations[hit].skip) {
+    const l = locations[hit];
+    tt.textContent = `${tE(l.type)} ${l.name} (${l.type})`;
+    const rect = cv.getBoundingClientRect();
+    tt.style.left = (e.clientX - rect.left + 12) + 'px';
+    tt.style.top  = (e.clientY - rect.top  - 10) + 'px';
+    tt.style.opacity = '1';
+  } else {
+    tt.style.opacity = '0';
+  }
+});
+cv.addEventListener('mouseup', e => {
+  if (isPan) { isPan=false; cv.style.cursor = mode==='view'?'grab':'crosshair'; return; }
+  const {wx,wy} = screenToWorld(e);
+  const xp = Math.max(0,Math.min(100, wx/cv.width*100));
+  const yp = Math.max(0,Math.min(100, wy/cv.height*100));
+
+  if (mode === 'place') {
+    pendingXY = {x: parseFloat(xp.toFixed(1)), y: parseFloat(yp.toFixed(1))};
+    document.getElementById('m-x').value = pendingXY.x;
+    document.getElementById('m-y').value = pendingXY.y;
+    document.getElementById('xy-display').textContent = `X: ${pendingXY.x}%  Y: ${pendingXY.y}%`;
+    document.getElementById('m-name').focus();
+    redraw();
+  } else if (mode === 'edge' || mode === 'view') {
+    const hit = hitTest(wx, wy);
+    if (hit >= 0) selectLoc(hit);
+  }
+});
+cv.addEventListener('mouseleave', () => { isPan=false; document.getElementById('cv-tooltip').style.opacity='0'; });
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f = e.deltaY < 0 ? 1.12 : 0.9;
+  const r = cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+  scale = Math.max(0.3, Math.min(5, scale*f));
+  panX = mx-(mx-panX)*f; panY = my-(my-panY)*f;
+  redraw();
+}, {passive:false});
+
+function screenToWorld(e) {
+  const r = cv.getBoundingClientRect();
+  return { wx: (e.clientX-r.left-panX)/scale, wy: (e.clientY-r.top-panY)/scale };
+}
+
+function hitTest(wx, wy) {
+  const P=40, W=cv.width, H=cv.height;
+  let best=-1, bd=20/scale;
+  locations.forEach((l,i) => {
+    if (l.skip) return;
+    const lx=P+(l.x_pct/100)*(W-P*2), ly=P+(l.y_pct/100)*(H-P*2);
+    const d=Math.hypot(wx-lx, wy-ly);
+    if (d<bd){bd=d;best=i;}
+  });
+  return best;
+}
+
+// ── DRAW ──
+function redraw() {
+  const W=cv.width, H=cv.height;
+  if (!W||!H) return;
+  const P=40;
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(panX,panY);
+  ctx.scale(scale,scale);
+
+  // Background
+  ctx.fillStyle='#0b0c14'; ctx.fillRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.lineWidth=1/scale;
+  for(let x=0;x<W;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+
+  // Floor map bg
+  if (bgImg && bgImg.complete && bgImg.naturalWidth) {
+    ctx.globalAlpha = .28;
+    ctx.drawImage(bgImg, P, P, W-P*2, H-P*2);
+    ctx.globalAlpha = 1;
+  }
+
+  const tx = p => P + (p/100)*(W-P*2);
+  const ty = p => P + (p/100)*(H-P*2);
+
+  // Edges
+  edges.forEach(ed => {
+    const a = locations[ed.from], b = locations[ed.to];
+    if (!a||!b||a.skip||b.skip) return;
+    ctx.beginPath();
+    ctx.strokeStyle = ed.walk_type==='walk' ? 'rgba(255,255,255,.12)' : 'rgba(41,182,246,.3)';
+    ctx.lineWidth = 2/scale;
+    ctx.setLineDash(ed.walk_type==='walk'?[]:[6/scale,4/scale]);
+    ctx.moveTo(tx(a.x_pct),ty(a.y_pct));
+    ctx.lineTo(tx(b.x_pct),ty(b.y_pct));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Edge-from highlight line
+  if (mode==='edge' && edgeFrom>=0) {
+    const a=locations[edgeFrom];
+    // Draw a pulsing ring
+    ctx.beginPath();
+    ctx.arc(tx(a.x_pct),ty(a.y_pct), 18/scale, 0, Math.PI*2);
+    ctx.strokeStyle='rgba(96,165,250,.6)';
+    ctx.lineWidth=2/scale; ctx.stroke();
+  }
+
+  // Pending place indicator
+  if (mode==='place' && pendingXY) {
+    const px=tx(pendingXY.x), py=ty(pendingXY.y);
+    const g=ctx.createRadialGradient(px,py,0,px,py,22/scale);
+    g.addColorStop(0,'rgba(108,99,255,.35)'); g.addColorStop(1,'transparent');
+    ctx.beginPath(); ctx.arc(px,py,22/scale,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    ctx.beginPath(); ctx.arc(px,py,8/scale,0,Math.PI*2);
+    ctx.fillStyle='#6c63ff'; ctx.fill();
+    ctx.font=`700 ${10/scale}px "Segoe UI",sans-serif`;
+    ctx.fillStyle='#fff'; ctx.textAlign='center';
+    ctx.fillText('📍 Click "Add to Map"', px, py-14/scale);
+  }
+
+  // Dots
+  locations.forEach((l,i) => {
+    if (l.skip) return;
+    const x=tx(l.x_pct), y=ty(l.y_pct);
+    const isSel = i===selIdx;
+    const isEdgeFrom = i===edgeFrom;
+
+    if (isSel || isEdgeFrom) {
+      const g=ctx.createRadialGradient(x,y,0,x,y,20/scale);
+      g.addColorStop(0,tC(l.type)+'44'); g.addColorStop(1,'transparent');
+      ctx.beginPath(); ctx.arc(x,y,20/scale,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    }
+
+    const r = isSel ? 9/scale : l.manual ? 8/scale : 6/scale;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle = tC(l.type); ctx.fill();
+    if (isSel || l.manual) {
+      ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1.5/scale; ctx.stroke();
+    }
+
+    // Label
+    const showL = isSel || l.manual || l.type==='junction'
+      ? false
+      : ['entrance','lift','escalator','info','atm','parking','emergency','restroom'].includes(l.type);
+    const showAlways = isSel || l.manual;
+
+    if (showAlways || showL) {
+      const lbl = l.name.length>18 ? l.name.slice(0,17)+'…' : l.name;
+      const fs=10/scale;
+      ctx.font=`${isSel?'700':'500'} ${fs}px "Segoe UI",sans-serif`;
+      const tw=ctx.measureText(lbl).width;
+      ctx.fillStyle='rgba(11,12,20,.85)';
+      rr(ctx,x-tw/2-4/scale,y-24/scale,tw+8/scale,14/scale,3/scale); ctx.fill();
+      ctx.fillStyle=isSel?'#a5b4fc':l.manual?'#fbbf24':'rgba(255,255,255,.85)';
+      ctx.textAlign='center'; ctx.fillText(lbl,x,y-13/scale);
+    } else if (l.type !== 'junction') {
+      // Small dot label on hover — just always show name for shops
+      const lbl = l.name.length>14?l.name.slice(0,13)+'…':l.name;
+      const fs=9/scale;
+      ctx.font=`400 ${fs}px "Segoe UI",sans-serif`;
+      const tw=ctx.measureText(lbl).width;
+      ctx.fillStyle='rgba(11,12,20,.7)';
+      rr(ctx,x-tw/2-3/scale,y-22/scale,tw+6/scale,12/scale,2/scale); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.65)';
+      ctx.textAlign='center'; ctx.fillText(lbl,x,y-13/scale);
+    }
+  });
+
+  // Floor label watermark
+  ctx.font=`bold ${11/scale}px "Segoe UI",sans-serif`;
+  ctx.fillStyle='rgba(255,255,255,.06)'; ctx.textAlign='left';
+  ctx.fillText(FLOOR_LABEL.toUpperCase(), 10/scale, 16/scale);
+  ctx.restore();
+}
+
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+
+// ── SAVE ──
+async function saveAll() {
+  const keep = locations.filter(l => !l.skip);
+  if (!keep.length) { alert('No locations to save. Add at least one.'); return; }
+
+  document.getElementById('save-btn').disabled = true;
+  document.getElementById('save-btn').textContent = '⏳ Saving...';
+
+  // Remap edge indices after skip filtering
+  const idxMap = {};
+  locations.forEach((l,i) => { if(!l.skip) idxMap[i] = Object.keys(idxMap).length; });
+  const remappedEdges = edges
+    .filter(e => !locations[e.from]?.skip && !locations[e.to]?.skip)
+    .map(e => ({from: idxMap[e.from], to: idxMap[e.to], walk_type: e.walk_type}));
+
+  try {
+    const resp = await fetch(`/dashboard/floor/${FLOOR_ID}/ai-save/`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({locations: keep, edges: remappedEdges})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      window.location = `/dashboard/${MALL_SLUG}/?saved=${data.created}`;
+    } else {
+      alert('Save error: ' + data.error);
+      document.getElementById('save-btn').disabled = false;
+      document.getElementById('save-btn').textContent = '✅ Save All to Database';
+    }
+  } catch(e) {
+    alert('Network error: ' + e.message);
+    document.getElementById('save-btn').disabled = false;
+    document.getElementById('save-btn').textContent = '✅ Save All to Database';
+  }
+}
+
+// ── UTILS ──
+function tC(t){const m={shop:'#a78bfa',restaurant:'#fb923c',lift:'#60a5fa',escalator:'#fbbf24',stairs:'#fbbf24',restroom:'#34d399',entrance:'#4ade80',atm:'#f472b6',parking:'#94a3b8',info:'#67e8f9',emergency:'#f87171',junction:'#4b5563'};return m[t]||'#6b7280'}
+function tE(t){const m={shop:'🛍️',restaurant:'🍽️',lift:'🛗',escalator:'↗️',stairs:'🪜',restroom:'🚻',entrance:'🚪',atm:'💳',parking:'🅿️',info:'ℹ️',emergency:'🚨',junction:'🔀'};return m[t]||'📍'}
+
+function showErr(msg){const e=document.getElementById('err-box');e.textContent='⚠️ '+msg;e.style.display='block'}
+function hideErr(){document.getElementById('err-box').style.display='none'}
+function showProgress(pct,lbl){
+  document.getElementById('progress-box').style.display='block';
+  document.getElementById('prog-label').textContent=lbl;
+  document.getElementById('prog-bar').style.width=pct+'%';
+}
+function hideProgress(){document.getElementById('progress-box').style.display='none'}
+
+let toastTmr;
+function toast(msg,d=2800){
+  let el=document.getElementById('toast-el');
+  if(!el){el=document.createElement('div');el.id='toast-el';
+    el.style.cssText='position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:#22243a;border:1px solid rgba(255,255,255,.12);padding:.5rem 1.1rem;border-radius:24px;font-size:.78rem;color:#eeeeff;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.5);white-space:nowrap;transition:opacity .25s';
+    document.body.appendChild(el);
+  }
+  el.textContent=msg; el.style.opacity='1';
+  clearTimeout(toastTmr); toastTmr=setTimeout(()=>el.style.opacity='0',d);
+}
+</script>
+{% endblock %}

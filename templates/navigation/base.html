@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}MallNav{% endblock %}</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0c14;--surf:#13141f;--card:#1c1d2e;
+  --border:rgba(255,255,255,0.08);--primary:#6c63ff;
+  --text:#eeeeff;--muted:#7b7d9e;--green:#00e676;--red:#ef5350;
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+.nav{background:var(--surf);border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;height:56px}
+.nav-brand{font-weight:800;font-size:1.05rem;color:var(--text);display:flex;align-items:center;gap:.5rem}
+.nav-links{display:flex;align-items:center;gap:1.2rem;font-size:.85rem}
+.nav-links a{color:var(--muted)}
+.nav-links a:hover{color:var(--text);text-decoration:none}
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1.1rem;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:#4f48cc;text-decoration:none}
+.btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn-ghost:hover{background:rgba(255,255,255,.05);text-decoration:none}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{background:#c62828;text-decoration:none}
+.btn-sm{padding:.35rem .75rem;font-size:.78rem}
+.container{max-width:1100px;margin:0 auto;padding:0 1.5rem}
+.page{padding:2rem 0}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
+.card-title{font-size:.95rem;font-weight:700}
+.form-group{margin-bottom:1.1rem}
+.form-group label{display:block;margin-bottom:.35rem;font-size:.8rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.form-control{width:100%;padding:.65rem 1rem;background:#0f1019;border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:.9rem}
+.form-control:focus{outline:none;border-color:var(--primary)}
+select.form-control{cursor:pointer}
+.badge{display:inline-flex;align-items:center;gap:.25rem;padding:.18rem .55rem;border-radius:20px;font-size:.72rem;font-weight:600}
+.badge-primary{background:rgba(108,99,255,.2);color:#a5b4fc}
+.badge-success{background:rgba(0,230,118,.15);color:#69f0ae}
+.badge-warning{background:rgba(255,193,7,.15);color:#ffd54f}
+.badge-danger{background:rgba(239,83,80,.15);color:#ef9a9a}
+.badge-info{background:rgba(41,182,246,.15);color:#81d4fa}
+.alert{padding:.75rem 1rem;border-radius:8px;margin:.5rem 0;font-size:.875rem}
+.alert-success{background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.3);color:#69f0ae}
+.alert-error{background:rgba(239,83,80,.1);border:1px solid rgba(239,83,80,.3);color:#ef9a9a}
+.alert-info{background:rgba(41,182,246,.1);border:1px solid rgba(41,182,246,.3);color:#81d4fa}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:.65rem 1rem;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)}
+td{padding:.65rem 1rem;border-bottom:1px solid rgba(255,255,255,.03)}
+tr:hover td{background:rgba(255,255,255,.02)}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1.25rem}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem}
+.stat-box{text-align:center;padding:1.25rem}
+.stat-num{font-size:2rem;font-weight:800;color:var(--primary)}
+.stat-lbl{font-size:.75rem;color:var(--muted);margin-top:.2rem}
+</style>
+{% block extra_css %}{% endblock %}
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-brand">🏬 MallNav</div>
+  <div class="nav-links">
+    <a href="/">Malls</a>
+    {% if user.is_authenticated %}
+    <a href="/dashboard/">Dashboard</a>
+    <a href="/admin/" target="_blank">Django Admin</a>
+    <a href="/logout/" class="btn btn-ghost btn-sm">Logout</a>
+    {% else %}
+    <a href="/login/" class="btn btn-primary btn-sm">Login</a>
+    {% endif %}
+  </div>
+</nav>
+
+{% if messages %}
+<div class="container" style="margin-top:1rem">
+  {% for m in messages %}
+  <div class="alert alert-{% if m.tags == 'error' %}error{% elif m.tags == 'success' %}success{% else %}info{% endif %}">
+    {{ m }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% block content %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,616 @@
+{% extends 'navigation/base.html' %}
+{% block title %}{{ mall.name }} — Admin{% endblock %}
+{% block extra_css %}
+<style>
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:1.5rem;overflow-x:auto;flex-wrap:nowrap}
+.tab{padding:.65rem 1.1rem;font-size:.83rem;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .2s;background:none;border-left:none;border-right:none;border-top:none;white-space:nowrap;flex-shrink:0}
+.tab.active{color:var(--text);border-color:var(--primary)}
+.panel{display:none}.panel.active{display:block}
+.type-badge{display:inline-block;padding:.12rem .45rem;border-radius:6px;font-size:.68rem;font-weight:700}
+.t-shop{background:rgba(167,139,250,.2);color:#a78bfa}
+.t-restaurant{background:rgba(251,146,60,.2);color:#fb923c}
+.t-lift{background:rgba(96,165,250,.2);color:#60a5fa}
+.t-escalator,.t-stairs{background:rgba(251,191,36,.2);color:#fbbf24}
+.t-restroom{background:rgba(52,211,153,.2);color:#34d399}
+.t-entrance{background:rgba(74,222,128,.2);color:#4ade80}
+.t-junction{background:rgba(148,163,184,.2);color:#94a3b8}
+.t-atm{background:rgba(244,114,182,.2);color:#f472b6}
+.t-parking{background:rgba(100,116,139,.2);color:#94a3b8}
+.t-info{background:rgba(103,232,249,.2);color:#67e8f9}
+.t-emergency{background:rgba(239,83,80,.2);color:#ef9a9a}
+
+/* AI tab styles */
+.ai-card{background:linear-gradient(135deg,rgba(108,99,255,.08),rgba(168,85,247,.05));border:1.5px solid rgba(108,99,255,.25);border-radius:14px;padding:1.25rem 1.5rem;margin-bottom:1.25rem}
+.ai-step{display:flex;gap:.875rem;align-items:flex-start;padding:.875rem 0;border-bottom:1px solid var(--border)}
+.ai-step:last-child{border:none;padding-bottom:0}
+.ai-step-num{width:28px;height:28px;border-radius:50%;background:rgba(108,99,255,.2);border:1.5px solid rgba(108,99,255,.4);display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:800;color:#a5b4fc;flex-shrink:0;margin-top:.1rem}
+.ai-step-body{flex:1}
+.ai-step-title{font-weight:700;font-size:.88rem;margin-bottom:.2rem}
+.ai-step-desc{font-size:.8rem;color:var(--muted);line-height:1.5}
+
+/* Detection results */
+#detect-result{display:none}
+.loc-row{display:flex;align-items:center;gap:.5rem;padding:.45rem .6rem;border-radius:8px;border:1px solid var(--border);margin-bottom:.35rem;background:var(--card)}
+.loc-row.skipped{opacity:.4}
+.loc-chk{width:16px;height:16px;border-radius:4px;flex-shrink:0;cursor:pointer;accent-color:var(--primary)}
+.loc-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.loc-name-inp{flex:1;background:transparent;border:none;color:var(--text);font-size:.82rem;font-weight:600;padding:0;outline:none;min-width:60px}
+.loc-name-inp:focus{background:rgba(255,255,255,.04);border-radius:4px;padding:0 4px}
+.loc-type-sel{background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.72rem;padding:.18rem .4rem;cursor:pointer}
+.loc-pos{font-size:.7rem;color:var(--muted);white-space:nowrap}
+
+/* Preview map for AI results */
+#ai-preview-wrap{position:relative;background:#0a0b11;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:.875rem}
+
+/* Spinner */
+.ai-spin{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.15);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:.4rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.progress-bar{height:4px;background:var(--card2);border-radius:2px;overflow:hidden;margin:.5rem 0}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--primary),#a855f7);border-radius:2px;transition:width .4s;width:0}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container page">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem">
+    <div>
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:.25rem"><a href="/dashboard/">Dashboard</a> › {{ mall.name }}</div>
+      <h1 style="font-size:1.5rem;font-weight:800">{{ mall.name }}</h1>
+      <p style="color:var(--muted);font-size:.85rem;margin-top:.2rem">{{ mall.city }} · {{ mall.total_floors }} floors</p>
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <a href="/navigate/{{ mall.slug }}/" class="btn btn-ghost" target="_blank">🗺 View Map</a>
+      <a href="/dashboard/{{ mall.slug }}/qr/generate/" class="btn btn-ghost">📱 Generate QR</a>
+      <a href="/dashboard/{{ mall.slug }}/location/add/" class="btn btn-primary">+ Location</a>
+      <a href="/dashboard/{{ mall.slug }}/edge/add/" class="btn btn-primary">+ Connection</a>
+    </div>
+  </div>
+
+  <div class="grid-3" style="margin-bottom:1.5rem;grid-template-columns:repeat(4,1fr)">
+    <div class="card stat-box"><div class="stat-num">{{ locations|length }}</div><div class="stat-lbl">Locations</div></div>
+    <div class="card stat-box"><div class="stat-num">{{ edges|length }}</div><div class="stat-lbl">Connections</div></div>
+    <div class="card stat-box"><div class="stat-num">{{ total_scans }}</div><div class="stat-lbl">QR Scans</div></div>
+    <div class="card stat-box"><div class="stat-num">{{ total_searches }}</div><div class="stat-lbl">Navigations</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('locs',this)">Locations ({{ locations|length }})</button>
+    <button class="tab" onclick="showTab('edges',this)">Connections ({{ edges|length }})</button>
+    <button class="tab" onclick="showTab('floors',this)">Floors & Maps</button>
+    <button class="tab" onclick="showTab('ai',this)">🤖 AI Analyse</button>
+    <button class="tab" onclick="showTab('analytics',this)">Analytics</button>
+    <button class="tab" onclick="showTab('preview',this)">Map Preview</button>
+  </div>
+
+  <!-- ── LOCATIONS ── -->
+  <div id="tab-locs" class="panel active">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.875rem">
+      <div style="color:var(--muted);font-size:.85rem">{{ locations|length }} locations across {{ floors|length }} floors</div>
+      <a href="/dashboard/{{ mall.slug }}/location/add/" class="btn btn-primary btn-sm">+ Add Location</a>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Name</th><th>Code</th><th>Type</th><th>Floor</th><th>X%</th><th>Y%</th><th>QR</th><th></th></tr></thead>
+        <tbody>
+        {% for loc in locations %}
+        <tr>
+          <td><strong>{{ loc.name }}</strong></td>
+          <td><code style="font-size:.72rem;background:#0f1019;padding:.15rem .4rem;border-radius:4px">{{ loc.code }}</code></td>
+          <td><span class="type-badge t-{{ loc.loc_type }}">{{ loc.get_loc_type_display }}</span></td>
+          <td>{{ loc.floor.label }}</td>
+          <td style="color:var(--muted)">{{ loc.x_pct|floatformat:0 }}</td>
+          <td style="color:var(--muted)">{{ loc.y_pct|floatformat:0 }}</td>
+          <td>{% if loc.qr_image %}<a href="/dashboard/location/{{ loc.id }}/qr/" class="btn btn-ghost btn-sm">⬇ QR</a>{% else %}<span style="color:var(--muted);font-size:.75rem">—</span>{% endif %}</td>
+          <td style="display:flex;gap:.3rem">
+            <a href="/dashboard/location/{{ loc.id }}/edit/" class="btn btn-ghost btn-sm">Edit</a>
+            <form method="post" action="/dashboard/location/{{ loc.id }}/delete/" onsubmit="return confirm('Delete {{ loc.name }}?')">{% csrf_token %}<button type="submit" class="btn btn-danger btn-sm">✕</button></form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem">No locations yet. <a href="/dashboard/{{ mall.slug }}/location/add/">Add first →</a></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── CONNECTIONS ── -->
+  <div id="tab-edges" class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.875rem">
+      <div style="color:var(--muted);font-size:.85rem">{{ edges|length }} connections define walkable paths</div>
+      <a href="/dashboard/{{ mall.slug }}/edge/add/" class="btn btn-primary btn-sm">+ Add Connection</a>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>From</th><th>To</th><th>Type</th><th>Weight</th><th></th></tr></thead>
+        <tbody>
+        {% for e in edges %}
+        <tr>
+          <td>{{ e.from_loc.name }} <span style="color:var(--muted);font-size:.72rem">({{ e.from_loc.floor.label }})</span></td>
+          <td>{{ e.to_loc.name }} <span style="color:var(--muted);font-size:.72rem">({{ e.to_loc.floor.label }})</span></td>
+          <td><span class="badge badge-info">{{ e.get_walk_type_display }}</span></td>
+          <td>{{ e.weight }}</td>
+          <td><form method="post" action="/dashboard/edge/{{ e.id }}/delete/" onsubmit="return confirm('Delete?')">{% csrf_token %}<button type="submit" class="btn btn-danger btn-sm">✕</button></form></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">No connections yet. <a href="/dashboard/{{ mall.slug }}/edge/add/">Add first →</a></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── FLOORS & MAPS ── -->
+  <div id="tab-floors" class="panel">
+    <div class="grid-2">
+      {% for floor in floors %}
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">{{ floor.label }}</div>
+          <span class="badge badge-primary">Floor {{ floor.number }}</span>
+        </div>
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:.875rem">{{ floor.loc_count }} locations</div>
+        {% if floor.map_image %}
+        <div style="position:relative;margin-bottom:.875rem">
+          <img src="{{ floor.map_image.url }}" style="width:100%;border-radius:8px;display:block" alt="{{ floor.label }}">
+          <form method="post" action="/dashboard/floor/{{ floor.id }}/delete-map/" style="position:absolute;top:.5rem;right:.5rem"
+                onsubmit="return confirm('Delete the background map image for {{ floor.label }}?\n\nAll location nodes and connections will be kept — only the background image is removed.')">
+            {% csrf_token %}
+            <button type="submit" title="Delete background image"
+              style="background:rgba(239,68,68,.85);backdrop-filter:blur(4px);border:none;color:#fff;border-radius:7px;padding:.3rem .65rem;cursor:pointer;font-size:.8rem;font-weight:600;display:flex;align-items:center;gap:.3rem">
+              🗑 Remove Map Image
+            </button>
+          </form>
+        </div>
+        {% else %}
+        <div style="height:100px;background:#0f1019;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.8rem;margin-bottom:.875rem">No map image uploaded</div>
+        {% endif %}
+        <form method="post" action="/dashboard/floor/{{ floor.id }}/label/">
+          {% csrf_token %}
+          <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+            <input name="label" value="{{ floor.label }}" class="form-control" style="font-size:.8rem;padding:.45rem .75rem">
+            <button type="submit" class="btn btn-ghost btn-sm">Save Label</button>
+          </div>
+        </form>
+        <form method="post" action="/dashboard/floor/{{ floor.id }}/upload/" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <input type="file" name="map_image" accept="image/*" class="form-control" style="font-size:.78rem;padding:.35rem">
+            <button type="submit" class="btn btn-primary btn-sm">Upload</button>
+          </div>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ── AI ANALYSE TAB ── -->
+  <div id="tab-ai" class="panel">
+
+    <div class="ai-card">
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem">
+        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--primary),#a855f7);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">🤖</div>
+        <div>
+          <div style="font-weight:700;font-size:1rem">AI Floor Map Analyser</div>
+          <div style="font-size:.8rem;color:var(--muted)">Upload a floor plan image → Claude Vision detects shops, lifts, restrooms and generates the map automatically</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:.875rem;flex-wrap:wrap">
+        <div class="ai-step">
+          <div class="ai-step-num">1</div>
+          <div class="ai-step-body"><div class="ai-step-title">Upload floor plan</div><div class="ai-step-desc">Photo of mall directory board, PDF export, or hand-drawn sketch — any image works</div></div>
+        </div>
+        <div class="ai-step">
+          <div class="ai-step-num">2</div>
+          <div class="ai-step-body"><div class="ai-step-title">AI detects everything</div><div class="ai-step-desc">Claude reads shop names, lifts, restrooms, entrances and estimates X/Y positions</div></div>
+        </div>
+        <div class="ai-step">
+          <div class="ai-step-num">3</div>
+          <div class="ai-step-body"><div class="ai-step-title">Review & confirm</div><div class="ai-step-desc">See detected locations overlaid on map. Uncheck any wrong ones before saving</div></div>
+        </div>
+        <div class="ai-step">
+          <div class="ai-step-num">4</div>
+          <div class="ai-step-body"><div class="ai-step-title">Add missing shops</div><div class="ai-step-desc">Use "+ Location" (click-on-map) for small vendors or shops not visible in the image</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floor selector + API key + image -->
+    <div class="card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+        <div class="form-group" style="margin:0">
+          <label>Select Floor to Analyse</label>
+          <select id="ai-floor" class="form-control">
+            {% for floor in floors %}
+            <option value="{{ floor.id }}" data-has-map="{% if floor.map_image %}1{% else %}0{% endif %}" data-map="{% if floor.map_image %}{{ floor.map_image.url }}{% endif %}">
+              {{ floor.label }}{% if floor.map_image %} ✓{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="margin:0" {% if server_has_key %}id="api-key-group" style="display:none"{% endif %}>
+          {% if server_has_key %}
+          <div style="background:var(--green,#22c55e)15;border:1px solid var(--green,#22c55e)40;border-radius:8px;padding:.6rem 1rem;font-size:.8rem;color:#16a34a">
+            ✅ API key configured on server — no key needed
+          </div>
+          {% else %}
+          <label>Anthropic API Key <a href="https://console.anthropic.com" target="_blank" style="font-size:.72rem;color:var(--primary);font-weight:400">(get one free)</a></label>
+          <input type="password" id="ai-key" class="form-control" placeholder="sk-ant-api03-..." autocomplete="off">
+          <small style="color:var(--muted);font-size:.71rem">Stored in browser only. Not sent to our server.</small>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:1rem">
+        <label>Floor Plan Image</label>
+        <div id="ai-img-wrap" style="border:2px dashed var(--border);border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s" onclick="document.getElementById('ai-img').click()" ondrop="dropImg(event)" ondragover="e=>e.preventDefault()">
+          <input type="file" id="ai-img" accept="image/*" style="display:none" onchange="previewImg(this)">
+          <div id="ai-img-hint">
+            <div style="font-size:1.5rem;margin-bottom:.4rem">🖼️</div>
+            <div style="font-size:.85rem;color:var(--muted)">Drop image here or click to browse</div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:.25rem">JPG, PNG, up to 10MB · Works with photos, PDFs exported as images, hand-drawn sketches</div>
+          </div>
+          <img id="ai-img-preview" style="display:none;max-width:100%;max-height:240px;border-radius:8px;margin:0 auto">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:.75rem;align-items:center">
+        <button class="btn btn-primary" id="ai-analyse-btn" onclick="runAnalysis()">🤖 Analyse Floor Map</button>
+        <div id="ai-status" style="font-size:.82rem;color:var(--muted)"></div>
+      </div>
+      <div class="progress-bar" id="ai-progress" style="display:none">
+        <div class="progress-fill" id="ai-progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="detect-result">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem;flex-wrap:wrap;gap:.5rem">
+        <div>
+          <div style="font-weight:700;font-size:1rem" id="result-title">Detected Locations</div>
+          <div style="font-size:.8rem;color:var(--muted)" id="result-sub"></div>
+        </div>
+        <div style="display:flex;gap:.5rem">
+          <button class="btn btn-ghost btn-sm" onclick="checkAll(true)">✓ All</button>
+          <button class="btn btn-ghost btn-sm" onclick="checkAll(false)">✗ None</button>
+          <button class="btn btn-primary" id="save-btn" onclick="saveDetected()">💾 Save to Mall</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start">
+
+        <!-- Left: detected list -->
+        <div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:.4rem">Detected — uncheck to skip</div>
+          <div id="loc-list" style="max-height:460px;overflow-y:auto;padding-right:.25rem"></div>
+          <div id="ai-notes" style="margin-top:.875rem;font-size:.78rem;color:var(--muted);background:var(--card);border-radius:8px;padding:.65rem .875rem;display:none"></div>
+        </div>
+
+        <!-- Right: preview map -->
+        <div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:.4rem">Preview — dots show detected positions</div>
+          <div id="ai-preview-wrap">
+            <canvas id="ai-preview-canvas" style="display:block;width:100%"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="save-status" style="margin-top:.875rem;display:none" class="card">
+        <div id="save-status-text"></div>
+      </div>
+    </div>
+
+  </div><!-- /tab-ai -->
+
+  <!-- ── ANALYTICS ── -->
+  <div id="tab-analytics" class="panel">
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Top Destinations</div></div>
+        {% for d in top_dest %}<div style="display:flex;justify-content:space-between;padding:.45rem 0;border-bottom:1px solid var(--border);font-size:.85rem"><span>{{ d.to_loc__name }}</span><span class="badge badge-primary">{{ d.n }}</span></div>{% empty %}<p style="color:var(--muted);font-size:.85rem">No navigation data yet.</p>{% endfor %}
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Recent QR Scans</div></div>
+        {% for scan in recent_scans %}<div style="display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--border);font-size:.8rem"><span>{{ scan.location.name }}</span><span style="color:var(--muted)">{{ scan.scanned_at|date:"d M H:i" }}</span></div>{% empty %}<p style="color:var(--muted);font-size:.85rem">No scans yet.</p>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MAP PREVIEW ── -->
+  <div id="tab-preview" class="panel">
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:1rem">Interactive preview of the navigation map.</p>
+    <div style="background:#0f1019;border:1px solid var(--border);border-radius:12px;position:relative;height:520px">
+      <div id="prev-tabs" style="display:flex;padding:0 1rem;border-bottom:1px solid var(--border)">
+        {% for fl in floors %}<div class="tab {% if forloop.first %}active{% endif %}" data-fn="{{ fl.number }}" onclick="prevFloor({{ fl.number }},this)">{{ fl.label }}</div>{% endfor %}
+      </div>
+      <canvas id="prevCanvas" style="width:100%;height:calc(100% - 42px);display:block"></canvas>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+/* ═══ TAB SWITCHING ═══ */
+function showTab(id,btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='preview')initPreview();
+}
+
+/* ═══ FLOOR PREVIEW ═══ */
+const LOCS  = {{ locations_json|safe }};
+const EDGES = {{ edges_json|safe }};
+const FLOORS= {{ floors_json|safe }};
+let prevFloorNum = FLOORS[0]?.number ?? 0;
+let prevInited   = false;
+
+function prevFloor(n,btn){prevFloorNum=n;document.querySelectorAll('#prev-tabs .tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');drawPreview();}
+function initPreview(){if(!prevInited){prevInited=true;setTimeout(()=>{resizePrev();drawPreview();},50);}}
+function resizePrev(){const c=document.getElementById('prevCanvas');const p=c.parentElement;c.width=p.clientWidth;c.height=p.clientHeight-42;}
+function drawPreview(){
+  const c=document.getElementById('prevCanvas');if(!c||!c.width)return;
+  const ctx=c.getContext('2d');const W=c.width,H=c.height,P=36;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  const tx=p=>P+(p/100)*(W-P*2),ty=p=>P+(p/100)*(H-P*2);
+  const fl=FLOORS.find(f=>f.number===prevFloorNum);
+  if(fl?.map_img_url){const img=pImg(fl.map_img_url);if(img.complete&&img.naturalWidth){ctx.globalAlpha=.2;ctx.drawImage(img,P,P,W-P*2,H-P*2);ctx.globalAlpha=1;}}
+  EDGES.forEach(e=>{if(e.from_floor!==prevFloorNum||e.to_floor!==prevFloorNum)return;const a=LOCS.find(l=>l.code===e.from_code),b=LOCS.find(l=>l.code===e.to_code);if(!a||!b)return;ctx.beginPath();ctx.strokeStyle='rgba(255,255,255,0.12)';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.moveTo(tx(a.x_pct),ty(a.y_pct));ctx.lineTo(tx(b.x_pct),ty(b.y_pct));ctx.stroke();});
+  LOCS.filter(l=>l.floor_number===prevFloorNum).forEach(loc=>{const x=tx(loc.x_pct),y=ty(loc.y_pct);const isJ=loc.loc_type==='junction';const r=isJ?2.5:5;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=isJ?'rgba(255,255,255,0.1)':typeClr(loc.loc_type);ctx.fill();if(!isJ){ctx.font='600 9px "Segoe UI",sans-serif';ctx.fillStyle='rgba(255,255,255,0.75)';ctx.textAlign='center';ctx.fillText(loc.name.slice(0,16),x,y-9);}});
+  ctx.font='bold 10px "Segoe UI",sans-serif';ctx.fillStyle='rgba(255,255,255,0.07)';ctx.textAlign='left';ctx.fillText((fl?.label||'').toUpperCase(),10,16);
+}
+function typeClr(t){const m={shop:'#a78bfa',restaurant:'#fb923c',lift:'#60a5fa',escalator:'#fbbf24',stairs:'#fbbf24',restroom:'#34d399',entrance:'#4ade80',atm:'#f472b6',parking:'#94a3b8',info:'#67e8f9',emergency:'#f87171'};return m[t]||'#6b7280';}
+const pImgCache={};
+function pImg(url){if(!pImgCache[url]){const i=new Image();i.src=url;i.onload=()=>{if(prevInited)drawPreview();};pImgCache[url]=i;}return pImgCache[url];}
+window.addEventListener('resize',()=>{if(prevInited){resizePrev();drawPreview();}});
+
+/* ═══ AI ANALYSIS ═══ */
+let detectedData = null;
+let uploadedImgB64 = null;
+let uploadedImgType = 'image/jpeg';
+let currentFloorId = null;
+
+function previewImg(inp) {
+  const file = inp.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('ai-img-hint').style.display = 'none';
+    const prev = document.getElementById('ai-img-preview');
+    prev.src = e.target.result; prev.style.display = 'block';
+    uploadedImgB64  = e.target.result.split(',')[1];
+    uploadedImgType = file.type || 'image/jpeg';
+  };
+  reader.readAsDataURL(file);
+}
+
+function dropImg(e) {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0]; if(!file) return;
+  document.getElementById('ai-img').files = e.dataTransfer.files;
+  previewImg({files: [file]});
+}
+
+async function runAnalysis() {
+  const keyEl = document.getElementById('ai-key');
+  const key = keyEl ? keyEl.value.trim() : '';
+  const serverHasKey = {{ server_has_key|yesno:"true,false" }};
+  if (!key && !serverHasKey) { setStatus('⚠️ Enter your Anthropic API key first', 'var(--red)'); return; }
+
+  const selOpt = document.getElementById('ai-floor');
+  currentFloorId = selOpt.value;
+  const hasExistingMap = selOpt.options[selOpt.selectedIndex].dataset.hasMap === '1';
+
+  if (!uploadedImgB64 && !hasExistingMap) {
+    setStatus('⚠️ Upload an image or use the existing floor map from Floors & Maps tab', 'var(--red)'); return;
+  }
+
+  // Build form data
+  const fd = new FormData();
+  if (key) fd.append('api_key', key);
+  if (uploadedImgB64) {
+    // Convert back to file
+    const byteStr = atob(uploadedImgB64);
+    const ab = new ArrayBuffer(byteStr.length);
+    const ia = new Uint8Array(ab);
+    for(let i=0;i<byteStr.length;i++) ia[i] = byteStr.charCodeAt(i);
+    const blob = new Blob([ab], {type: uploadedImgType});
+    fd.append('image', blob, 'floormap.jpg');
+  }
+  fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+  setStatus('<span class="ai-spin"></span> Analysing floor map…', 'var(--muted)');
+  document.getElementById('ai-analyse-btn').disabled = true;
+  showProgress(true);
+  animateProgress();
+
+  try {
+    const res  = await fetch(`/dashboard/floor/${currentFloorId}/ai-analyse/`, {method:'POST', body:fd});
+    const data = await res.json();
+    showProgress(false);
+    document.getElementById('ai-analyse-btn').disabled = false;
+
+    if (!data.ok) { setStatus('❌ ' + data.error, '#ef9a9a'); return; }
+    setStatus(`✅ Found ${data.data.locations?.length || 0} locations on ${data.floor_label}`, '#4ade80');
+    detectedData = data.data;
+    renderResults(data.data, selOpt.options[selOpt.selectedIndex].dataset.map);
+  } catch(e) {
+    showProgress(false);
+    document.getElementById('ai-analyse-btn').disabled = false;
+    setStatus('❌ Network error: ' + e.message, '#ef9a9a');
+  }
+}
+
+function setStatus(msg, color) {
+  const el = document.getElementById('ai-status');
+  el.innerHTML = msg; el.style.color = color || 'var(--muted)';
+}
+
+let progInt = null;
+function showProgress(on) {
+  document.getElementById('ai-progress').style.display = on ? 'block' : 'none';
+  if(!on && progInt){ clearInterval(progInt); document.getElementById('ai-progress-fill').style.width='0'; }
+}
+function animateProgress() {
+  let w = 0;
+  progInt = setInterval(() => {
+    w = Math.min(w + (Math.random()*3), 90);
+    document.getElementById('ai-progress-fill').style.width = w + '%';
+  }, 300);
+}
+
+function renderResults(data, existingMapUrl) {
+  const locs = data.locations || [];
+  document.getElementById('detect-result').style.display = 'block';
+  document.getElementById('result-title').textContent = `Detected ${locs.length} Locations`;
+  document.getElementById('result-sub').textContent = data.notes ? data.notes.slice(0,120) : 'Review below — uncheck any incorrect detections before saving';
+
+  // Render list
+  const listEl = document.getElementById('loc-list');
+  const TYPE_OPTS = ['shop','restaurant','restroom','lift','escalator','stairs','entrance','atm','parking','info','emergency','junction'];
+  listEl.innerHTML = locs.map((loc, i) => `
+    <div class="loc-row" id="locrow-${i}">
+      <input type="checkbox" class="loc-chk" id="chk-${i}" checked onchange="rowToggle(${i})">
+      <div class="loc-dot" style="background:${typeClr(loc.type)}"></div>
+      <input class="loc-name-inp" id="locname-${i}" value="${loc.name}" title="Click to rename">
+      <select class="loc-type-sel" id="loctype-${i}">
+        ${TYPE_OPTS.map(t=>`<option value="${t}" ${t===loc.type?'selected':''}>${t}</option>`).join('')}
+      </select>
+      <span class="loc-pos">${parseFloat(loc.x_pct).toFixed(0)}%, ${parseFloat(loc.y_pct).toFixed(0)}%</span>
+    </div>`).join('');
+
+  // Notes
+  if (data.notes) {
+    const notesEl = document.getElementById('ai-notes');
+    notesEl.textContent = '💡 AI notes: ' + data.notes;
+    notesEl.style.display = 'block';
+  }
+
+  // Preview canvas
+  drawAiPreview(locs, existingMapUrl);
+}
+
+function rowToggle(i) {
+  const row = document.getElementById('locrow-'+i);
+  row.classList.toggle('skipped', !document.getElementById('chk-'+i).checked);
+}
+function checkAll(val) {
+  const locs = detectedData?.locations || [];
+  locs.forEach((_,i) => { document.getElementById('chk-'+i).checked=val; rowToggle(i); });
+}
+
+/* AI Preview Canvas */
+const aiImgCache = {};
+function aiGetImg(url){if(!aiImgCache[url]){const i=new Image();i.src=url;i.onload=()=>drawAiPreview(detectedData?.locations||[], url);aiImgCache[url]=i;}return aiImgCache[url];}
+
+function drawAiPreview(locs, mapUrl) {
+  const wrap   = document.getElementById('ai-preview-wrap');
+  const canvas = document.getElementById('ai-preview-canvas');
+  // Set canvas height proportional
+  const W = wrap.clientWidth || 400;
+  canvas.width  = W;
+  canvas.height = Math.round(W * 0.7);
+  const H = canvas.height;
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // The uploaded preview image or existing floor map
+  const imgSrc = uploadedImgB64 ? ('data:'+uploadedImgType+';base64,'+uploadedImgB64) : mapUrl;
+  if (imgSrc) {
+    const img = aiGetImg(imgSrc);
+    if(img.complete && img.naturalWidth){ ctx.globalAlpha=.4; ctx.drawImage(img,0,0,W,H); ctx.globalAlpha=1; }
+  }
+
+  // Draw detected locations
+  locs.forEach((loc, i) => {
+    const checked = document.getElementById('chk-'+i)?.checked !== false;
+    if (!checked) return;
+    const x = (loc.x_pct/100)*W, y = (loc.y_pct/100)*H;
+    const clr = typeClr(loc.type);
+
+    // Glow
+    const g = ctx.createRadialGradient(x,y,0,x,y,14);
+    g.addColorStop(0,clr+'44'); g.addColorStop(1,'transparent');
+    ctx.beginPath(); ctx.arc(x,y,14,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+
+    // Dot
+    ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fillStyle=clr; ctx.fill();
+
+    // Label
+    const name = document.getElementById('locname-'+i)?.value || loc.name;
+    const lbl  = name.length>12 ? name.slice(0,11)+'…' : name;
+    ctx.font='600 9px "Segoe UI",sans-serif';
+    const tw=ctx.measureText(lbl).width;
+    ctx.fillStyle='rgba(11,12,20,.82)';
+    rrect(ctx,x-tw/2-3,y-22,tw+6,13,3);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.88)';ctx.textAlign='center';ctx.fillText(lbl,x,y-12);
+  });
+
+  // Edge suggestions
+  const edges = detectedData?.edges || [];
+  edges.forEach(e => {
+    const a = locs[e.from], b = locs[e.to];
+    if(!a||!b) return;
+    const ax=(a.x_pct/100)*W,ay=(a.y_pct/100)*H,bx=(b.x_pct/100)*W,by=(b.y_pct/100)*H;
+    ctx.beginPath(); ctx.strokeStyle='rgba(108,99,255,.25)'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+    ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke(); ctx.setLineDash([]);
+  });
+}
+
+function rrect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+
+async function saveDetected() {
+  if (!detectedData || !currentFloorId) return;
+  const locs = detectedData.locations || [];
+  const edges = detectedData.edges || [];
+  const key = document.getElementById('ai-key').value.trim();
+
+  // Collect confirmed locations (checked + possibly renamed/retyped)
+  const toSave = locs.map((loc, i) => {
+    const chk = document.getElementById('chk-'+i);
+    if (!chk?.checked) return { ...loc, skip: true };
+    return {
+      ...loc,
+      name: document.getElementById('locname-'+i)?.value || loc.name,
+      type: document.getElementById('loctype-'+i)?.value || loc.type,
+    };
+  });
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = '⏳ Saving…';
+
+  try {
+    const res = await fetch(`/dashboard/floor/${currentFloorId}/ai-save/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+      body: JSON.stringify({ locations: toSave, edges: edges, api_key: key || '' })
+    });
+    const data = await res.json();
+    const ss = document.getElementById('save-status');
+    const st = document.getElementById('save-status-text');
+    ss.style.display = 'block';
+    if (data.ok) {
+      st.innerHTML = `<span style="color:#4ade80;font-weight:700">✅ Saved ${data.locations_created} locations and ${data.edges_created} connections!</span>
+        <br><span style="color:var(--muted);font-size:.82rem">Now go to <a href="/dashboard/{{ mall.slug }}/edge/add/">+ Connection</a> to add cross-floor (lift/escalator) edges, or <a href="/dashboard/{{ mall.slug }}/location/add/">+ Location</a> to add missing small vendors.</span>`;
+      btn.textContent = '✅ Saved';
+    } else {
+      st.innerHTML = `<span style="color:#ef9a9a">❌ ${data.error}</span>`;
+      btn.disabled = false; btn.textContent = '💾 Save to Mall';
+    }
+  } catch(e) {
+    document.getElementById('save-status-text').innerHTML = `<span style="color:#ef9a9a">❌ Network error: ${e.message}</span>`;
+    btn.disabled = false; btn.textContent = '💾 Save to Mall';
+  }
+}
+</script>
+{% endblock %}

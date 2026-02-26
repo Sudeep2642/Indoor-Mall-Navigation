@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Navigate — {{ mall.name }}</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0c14;--surf:#13141f;--card:#1c1d2e;--card2:#22243a;
+  --border:rgba(255,255,255,0.08);
+  --primary:#6c63ff;--green:#00e676;--orange:#ff6b35;
+  --yellow:#ffc107;--blue:#29b6f6;--red:#ef5350;
+  --text:#eeeeff;--muted:#7b7d9e;
+}
+html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text)}
+button,input{font-family:inherit;outline:none}
+
+/* ── APP SHELL ── */
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* HEADER */
+#hdr{
+  flex-shrink:0;height:52px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 1rem;background:var(--surf);border-bottom:1px solid var(--border);
+  z-index:100;position:relative;
+}
+.brand{display:flex;align-items:center;gap:.6rem}
+.bico{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--primary),#a855f7);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;overflow:hidden}
+.bico img{width:100%;height:100%;object-fit:cover}
+.bname{font-weight:700;font-size:.9rem;line-height:1.15}
+.bfloor{font-size:.65rem;color:var(--muted)}
+.livebadge{font-size:.63rem;font-weight:700;background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.25);padding:.2rem .55rem;border-radius:20px;display:flex;align-items:center;gap:.3rem;flex-shrink:0}
+.livebadge::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 1.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* BODY ROW */
+#body{
+  flex:1;
+  display:flex;
+  overflow:hidden;  /* critical — clips map, NOT the dropdown (dropdown is position:fixed) */
+  min-height:0;
+}
+
+/* ── DESKTOP SIDEBAR ── */
+#sidebar{
+  width:280px;min-width:280px;flex-shrink:0;
+  background:var(--surf);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  overflow:hidden;   /* sidebar itself clips; dropdown escapes via position:fixed */
+  z-index:50;        /* above map */
+}
+#sbscroll{
+  flex:1;
+  overflow-y:auto;overflow-x:hidden;
+  padding:.875rem;
+}
+#sbscroll::-webkit-scrollbar{width:3px}
+#sbscroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+
+/* ── MAP AREA ── */
+#maparea{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#ftabs{
+  flex-shrink:0;
+  display:flex;background:var(--surf);border-bottom:1px solid var(--border);
+  padding:0 .75rem;overflow-x:auto;
+}
+#ftabs::-webkit-scrollbar{display:none}
+.ftab{padding:.5rem .8rem;font-size:.75rem;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .2s;white-space:nowrap;flex-shrink:0;user-select:none}
+.ftab.active{color:var(--text);border-color:var(--primary)}
+#cwrap{flex:1;position:relative;overflow:hidden;touch-action:none;min-height:0}
+canvas{display:block}
+
+/* zoom btns */
+#zbtn{position:absolute;bottom:1rem;right:1rem;display:flex;flex-direction:column;gap:.3rem;z-index:10}
+.zb{width:34px;height:34px;border-radius:8px;background:rgba(19,20,31,.9);border:1px solid var(--border);color:var(--text);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.zb:hover{background:rgba(108,99,255,.3);border-color:var(--primary)}
+.maphint{position:absolute;bottom:1rem;left:50%;transform:translateX(-50%);background:rgba(19,20,31,.85);border:1px solid var(--border);padding:.38rem .875rem;border-radius:20px;font-size:.68rem;color:var(--muted);pointer-events:none;white-space:nowrap;max-width:80%}
+
+/* ── SHARED PANEL COMPONENTS ── */
+.you-banner{
+  background:linear-gradient(135deg,rgba(0,230,118,.12),rgba(0,230,118,.05));
+  border:1px solid rgba(0,230,118,.28);border-radius:11px;
+  padding:.75rem .875rem;display:flex;align-items:center;gap:.65rem;
+  margin-bottom:.7rem;animation:dIn .4s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes dIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.ypin{font-size:1.2rem;animation:bnc 2s ease-in-out infinite;flex-shrink:0}
+@keyframes bnc{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.ylbl{font-size:.59rem;text-transform:uppercase;letter-spacing:.07em;color:var(--green);font-weight:700}
+.yname{font-size:.88rem;font-weight:700;margin-top:.06rem}
+.yfloor{font-size:.67rem;color:var(--muted);margin-top:.04rem}
+
+.noqr{background:rgba(255,193,7,.07);border:1px solid rgba(255,193,7,.2);border-radius:11px;padding:.65rem .875rem;font-size:.76rem;color:#ffd54f;margin-bottom:.7rem;display:flex;gap:.55rem;align-items:flex-start}
+.noqr .ico{font-size:.95rem;margin-top:.08rem;flex-shrink:0}
+
+.flbl{font-size:.62rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin-bottom:.32rem}
+
+/* search input */
+.sw{position:relative;margin-bottom:.5rem}
+.sw .ico2{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.78rem;pointer-events:none;z-index:1}
+.sinp{
+  width:100%;padding:.62rem .75rem .62rem 2.15rem;
+  background:var(--card);border:1.5px solid var(--border);border-radius:9px;
+  color:var(--text);font-size:.83rem;transition:border-color .2s;
+}
+.sinp:focus{border-color:var(--primary);background:rgba(108,99,255,.06)}
+.sinp::placeholder{color:var(--muted)}
+
+/* DROPDOWN — always position:fixed, rendered at viewport level */
+.drop{
+  position:fixed;
+  background:var(--card2);border:1.5px solid var(--border);border-radius:10px;
+  overflow-y:auto;z-index:99999;display:none;
+  box-shadow:0 16px 40px rgba(0,0,0,.6);
+}
+.drop.open{display:block}
+.di{display:flex;align-items:center;gap:.5rem;padding:.6rem .8rem;cursor:pointer;font-size:.8rem;border-bottom:1px solid var(--border);transition:background .1s}
+.di:last-child{border:none}
+.di:active,.di:hover{background:rgba(108,99,255,.14)}
+.di-ic{width:25px;height:25px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.72rem;flex-shrink:0}
+.di-n{font-weight:500;font-size:.82rem}
+.di-f{font-size:.65rem;color:var(--muted);margin-top:.05rem}
+.di-a{color:var(--muted);font-size:.72rem;margin-left:auto}
+
+/* quick grid */
+.qg{display:grid;grid-template-columns:repeat(4,1fr);gap:.32rem;margin-bottom:.7rem}
+.qp{background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:.48rem .2rem;text-align:center;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;user-select:none}
+.qp:hover,.qp:active{background:rgba(108,99,255,.18);border-color:var(--primary)}
+.qpi{font-size:.95rem;display:block;margin-bottom:.1rem}
+.qpl{font-size:.57rem;color:var(--muted)}
+
+/* route box */
+.rbox{display:none}
+.rh{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem}
+.rtitle{font-weight:700;font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80%}
+.rcl{background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--muted);font-size:.7rem;padding:.16rem .42rem;flex-shrink:0}
+.rcl:hover{color:var(--text)}
+.rstats{display:grid;grid-template-columns:repeat(3,1fr);gap:.32rem;margin-bottom:.7rem}
+.rs{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.5rem .35rem;text-align:center}
+.rsn{font-size:.95rem;font-weight:800;color:var(--primary)}
+.rsl{font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:.06rem}
+.steps{list-style:none}
+.step{display:flex;gap:.55rem;align-items:flex-start;padding:.42rem 0;cursor:pointer}
+.step:hover .sdot{border-color:var(--primary)}
+.scol{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+.sdot{width:27px;height:27px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:.72rem;flex-shrink:0}
+.d-s{border-color:var(--green);background:rgba(0,230,118,.12);color:var(--green)}
+.d-e{border-color:var(--orange);background:rgba(255,107,53,.12);color:var(--orange)}
+.d-l{border-color:var(--blue);background:rgba(41,182,246,.12);color:var(--blue)}
+.d-es{border-color:var(--yellow);background:rgba(255,193,7,.12);color:var(--yellow)}
+.d-m{border-color:var(--primary);background:rgba(108,99,255,.12);color:var(--primary)}
+.sline{width:2px;height:15px;background:var(--border);margin:2px 0}
+.sb{flex:1;padding-top:.08rem;min-width:0}
+.sn{font-size:.8rem;font-weight:600}
+.sinstr{font-size:.7rem;color:var(--muted);margin-top:.1rem;line-height:1.4}
+.sbg{display:inline-block;font-size:.58rem;font-weight:600;background:rgba(108,99,255,.15);color:#a5b4fc;padding:.05rem .36rem;border-radius:5px;margin-top:.2rem}
+.sbg.fc{background:rgba(41,182,246,.15);color:var(--blue)}
+
+.rerr{display:none;background:rgba(239,83,80,.1);border:1px solid rgba(239,83,80,.3);border-radius:8px;padding:.55rem .75rem;font-size:.76rem;color:#ef9a9a;margin-top:.42rem}
+.rerr.show{display:block}
+
+/* spinner */
+#spinner{position:absolute;inset:0;background:rgba(11,12,20,.7);display:none;align-items:center;justify-content:center;z-index:60}
+#spinner.show{display:flex}
+.spin{width:32px;height:32px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--primary);animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* toast */
+#toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-8px);background:var(--card2);border:1px solid var(--border);padding:.48rem 1rem;border-radius:24px;font-size:.77rem;opacity:0;transition:all .28s;z-index:99999;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.5);white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ═══════════════════════════════════════
+   MOBILE  ≤700px
+   Map = full screen
+   Controls = bottom sheet
+═══════════════════════════════════════ */
+@media(max-width:700px){
+
+  /* Hide desktop sidebar completely */
+  #sidebar{display:none!important}
+
+  /* Map fills entire body */
+  #maparea{flex:1}
+
+  /* ── Bottom sheet ── */
+  #sheet{
+    position:fixed;
+    bottom:0;left:0;right:0;
+    z-index:1000;
+    background:var(--surf);
+    border-top:1.5px solid var(--border);
+    border-radius:18px 18px 0 0;
+    box-shadow:0 -8px 32px rgba(0,0,0,.55);
+    display:flex;flex-direction:column;
+    /* Collapsed: show only handle+search (~95px). Use max-height trick. */
+    max-height:95px;
+    overflow:hidden;
+    transition:max-height .35s cubic-bezier(.4,0,.2,1);
+  }
+  #sheet.open{
+    max-height:90dvh;
+    overflow:hidden;
+  }
+
+  #shandle{
+    width:34px;height:4px;background:rgba(255,255,255,.14);
+    border-radius:2px;margin:.6rem auto .4rem;flex-shrink:0;cursor:grab;
+  }
+
+  /* peek = always visible part (search bar) */
+  #speek{flex-shrink:0;padding:0 1rem .65rem}
+
+  /* content = rest, scrollable, only visible when open */
+  #scont{
+    flex:1;overflow-y:auto;overflow-x:hidden;
+    padding:0 1rem .5rem;
+  }
+  #scont::-webkit-scrollbar{display:none}
+
+  /* FAB to reopen sheet */
+  #fab{
+    position:fixed;bottom:105px;right:1rem;z-index:900;
+    width:46px;height:46px;border-radius:50%;
+    background:var(--primary);border:none;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.15rem;box-shadow:0 4px 18px rgba(108,99,255,.5);
+    transition:transform .2s,opacity .2s;
+  }
+  #fab:active{transform:scale(.9)}
+  #fab.hidden{opacity:0;pointer-events:none}
+
+  /* Zoom buttons — lift above sheet collapsed state */
+  #zbtn{bottom:108px}
+
+  /* Floor tabs — compact */
+  .ftab{padding:.42rem .65rem;font-size:.7rem}
+}
+
+/* Hidden on desktop */
+#sheet,#fab{display:none}
+@media(max-width:700px){#sheet{display:flex}#fab{display:flex}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="hdr">
+    <div class="brand">
+      <div class="bico">{% if mall.logo %}<img src="{{ mall.logo.url }}" alt="">{% else %}🏬{% endif %}</div>
+      <div>
+        <div class="bname">{{ mall.name }}</div>
+        <div class="bfloor" id="hfl">{% if current_loc %}{{ current_loc.floor.label }}{% else %}{{ mall.city }}{% endif %}</div>
+      </div>
+    </div>
+    <div class="livebadge">Live Nav</div>
+  </div>
+
+  <div id="body">
+
+    <!-- ══ DESKTOP SIDEBAR ══ -->
+    <div id="sidebar">
+      <div id="sbscroll">
+
+        {% if current_loc %}
+        <div class="you-banner">
+          <div class="ypin">📍</div>
+          <div><div class="ylbl">You are here</div><div class="yname">{{ current_loc.name }}</div><div class="yfloor">{{ current_loc.floor.label }}</div></div>
+        </div>
+        {% else %}
+        <div class="noqr"><div class="ico">📷</div><div><strong style="display:block;margin-bottom:.1rem">Scan a QR code</strong>Or select your start below.</div></div>
+        <div class="flbl">From</div>
+        <div class="sw">
+          <span class="ico2">🟢</span>
+          <input class="sinp" id="from-inp" placeholder="Select start location..." autocomplete="off" data-code="">
+          <div class="drop" id="from-dd"></div>
+        </div>
+        {% endif %}
+
+        <div class="flbl">Where to go?</div>
+        <div class="sw">
+          <span class="ico2">🔍</span>
+          <input class="sinp" id="to-inp" placeholder="Search destination..." autocomplete="off" data-code="">
+          <div class="drop" id="to-dd"></div>
+        </div>
+
+        <div class="flbl" style="margin-top:.2rem">Quick Find</div>
+        <div class="qg">
+          <div class="qp" onclick="quickFind('restroom')"><span class="qpi">🚻</span><span class="qpl">Restroom</span></div>
+          <div class="qp" onclick="quickFind('restaurant')"><span class="qpi">🍔</span><span class="qpl">Food</span></div>
+          <div class="qp" onclick="quickFind('entrance')"><span class="qpi">🚪</span><span class="qpl">Exit</span></div>
+          <div class="qp" onclick="quickFind('atm')"><span class="qpi">💳</span><span class="qpl">ATM</span></div>
+          <div class="qp" onclick="quickFind('lift')"><span class="qpi">🛗</span><span class="qpl">Lift</span></div>
+          <div class="qp" onclick="quickFind('parking')"><span class="qpi">🅿️</span><span class="qpl">Parking</span></div>
+          <div class="qp" onclick="quickFind('info')"><span class="qpi">ℹ️</span><span class="qpl">Help</span></div>
+          <div class="qp" onclick="quickFind('emergency')"><span class="qpi">🚨</span><span class="qpl">SOS</span></div>
+        </div>
+
+        <div class="rerr" id="rerr-d"></div>
+        <div class="rbox" id="rbox-d">
+          <div class="rh"><div class="rtitle" id="rtitle-d">Route</div><button class="rcl" onclick="clearRoute()">✕ Clear</button></div>
+          <div class="rstats" id="rstats-d"></div>
+          <ul class="steps" id="steps-d"></ul>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══ MAP ══ -->
+    <div id="maparea">
+      <div id="ftabs">
+        {% for fl in floors %}
+        <div class="ftab {% if forloop.first %}active{% endif %}" data-floor="{{ fl.number }}" onclick="setFloor({{ fl.number }})">{{ fl.label }}</div>
+        {% endfor %}
+      </div>
+      <div id="cwrap">
+        <canvas id="cv"></canvas>
+        <div class="maphint" id="maphint">{% if current_loc %}Pick destination above{% else %}Tap a dot or search{% endif %}</div>
+        <div id="zbtn">
+          <button class="zb" onclick="doZoom(1.25)">+</button>
+          <button class="zb" onclick="doZoom(0.8)">−</button>
+          <button class="zb" onclick="resetView()">⊙</button>
+        </div>
+        <div id="spinner"><div class="spin"></div></div>
+      </div>
+    </div>
+
+  </div><!-- /body -->
+</div><!-- /app -->
+
+<!-- ══ MOBILE SHEET ══ -->
+<div id="sheet">
+  <div id="shandle"></div>
+
+  <!-- Always visible: search bar -->
+  <div id="speek">
+    {% if current_loc %}
+    <div class="you-banner" style="margin-bottom:.5rem">
+      <div class="ypin">📍</div>
+      <div><div class="ylbl">You are here</div><div class="yname">{{ current_loc.name }}</div><div class="yfloor">{{ current_loc.floor.label }}</div></div>
+    </div>
+    {% endif %}
+    <div class="sw" style="margin-bottom:0">
+      <span class="ico2">🔍</span>
+      <input class="sinp" id="to-inp-m" placeholder="Where do you want to go?" autocomplete="off" data-code="" onfocus="openSheet()">
+      <div class="drop" id="to-dd-m"></div>
+    </div>
+  </div>
+
+  <!-- Expanded content -->
+  <div id="scont">
+    {% if not current_loc %}
+    <div class="noqr" style="margin-top:.5rem"><div class="ico">📷</div><div><strong style="display:block">Scan a QR code</strong>Or set start:</div></div>
+    <div class="flbl">From</div>
+    <div class="sw">
+      <span class="ico2">🟢</span>
+      <input class="sinp" id="from-inp-m" placeholder="Start location..." autocomplete="off" data-code="">
+      <div class="drop" id="from-dd-m"></div>
+    </div>
+    {% endif %}
+
+    <div class="flbl" style="margin-top:.35rem">Quick Find</div>
+    <div class="qg">
+      <div class="qp" onclick="quickFind('restroom')"><span class="qpi">🚻</span><span class="qpl">Restroom</span></div>
+      <div class="qp" onclick="quickFind('restaurant')"><span class="qpi">🍔</span><span class="qpl">Food</span></div>
+      <div class="qp" onclick="quickFind('entrance')"><span class="qpi">🚪</span><span class="qpl">Exit</span></div>
+      <div class="qp" onclick="quickFind('atm')"><span class="qpi">💳</span><span class="qpl">ATM</span></div>
+      <div class="qp" onclick="quickFind('lift')"><span class="qpi">🛗</span><span class="qpl">Lift</span></div>
+      <div class="qp" onclick="quickFind('parking')"><span class="qpi">🅿️</span><span class="qpl">Parking</span></div>
+      <div class="qp" onclick="quickFind('info')"><span class="qpi">ℹ️</span><span class="qpl">Help</span></div>
+      <div class="qp" onclick="quickFind('emergency')"><span class="qpi">🚨</span><span class="qpl">SOS</span></div>
+    </div>
+
+    <div class="rerr" id="rerr-m"></div>
+    <div class="rbox" id="rbox-m">
+      <div class="rh"><div class="rtitle" id="rtitle-m">Route</div><button class="rcl" onclick="clearRoute()">✕</button></div>
+      <div class="rstats" id="rstats-m"></div>
+      <ul class="steps" id="steps-m"></ul>
+    </div>
+  </div>
+</div>
+
+<button id="fab" onclick="openSheet()">🗺️</button>
+<div id="toast"></div>
+
+<script>
+/* ═══ DATA ═══ */
+const MALL_SLUG = "{{ mall.slug }}";
+const LOCATIONS = {{ locations_json|safe }};
+const EDGES     = {{ edges_json|safe }};
+const FLOORS    = {{ floors_json|safe }};
+const MY_CODE   = "{{ current_loc.code|default:'' }}";
+
+/* ═══ STATE ═══ */
+let fromCode  = MY_CODE;
+let toCode    = '';
+let routeData = null;
+let activeFloor = MY_CODE
+  ? (LOCATIONS.find(l => l.code === MY_CODE)?.floor_number ?? FLOORS[0]?.number ?? 0)
+  : (FLOORS[0]?.number ?? 0);
+
+// Canvas transform
+let scale = 1, panX = 0, panY = 0;
+let isPan = false, lastPan = {x:0,y:0};
+let pinchD = null, aniF = null;
+let tspStart = {x:0,y:0};
+
+/* ═══ MOBILE SHEET ═══ */
+function openSheet() {
+  document.getElementById('sheet').classList.add('open');
+  document.getElementById('fab').classList.add('hidden');
+}
+function closeSheet() {
+  document.getElementById('sheet').classList.remove('open');
+  document.getElementById('fab').classList.remove('hidden');
+  closeAllDrops();
+}
+// Swipe handle down to close
+(() => {
+  const h = document.getElementById('shandle');
+  let sy = 0, dragging = false;
+  h.addEventListener('touchstart', e => { sy = e.touches[0].clientY; dragging = true; }, {passive:true});
+  h.addEventListener('touchmove',  e => {
+    if (!dragging) return;
+    if (e.touches[0].clientY - sy > 55) { closeSheet(); dragging = false; }
+  }, {passive:true});
+  h.addEventListener('touchend', () => { dragging = false; });
+})();
+
+function closeAllDrops() {
+  document.querySelectorAll('.drop').forEach(d => d.classList.remove('open'));
+}
+
+/* ═══ DROPDOWN — position:fixed so it NEVER overlaps map ═══ */
+function showDrop(inp, dd, locs, onPick) {
+  if (!locs.length) { dd.classList.remove('open'); return; }
+
+  const rect = inp.getBoundingClientRect();
+
+  // On mobile with keyboard open, visualViewport gives the REAL visible area
+  const vvh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const vvOffsetTop = window.visualViewport ? window.visualViewport.offsetTop : 0;
+
+  const spaceBelow = vvh - (rect.bottom - vvOffsetTop) - 6;
+  const spaceAbove = rect.top - vvOffsetTop - 6;
+
+  // Always try to open below first; open above if very little space below
+  const openAbove = spaceBelow < 100 && spaceAbove > spaceBelow;
+  const dropH = Math.min(200, openAbove ? spaceAbove : Math.max(spaceBelow, 80));
+
+  dd.style.left      = rect.left + 'px';
+  dd.style.width     = rect.width + 'px';
+  dd.style.maxHeight = dropH + 'px';
+  dd.style.right     = 'auto';
+
+  if (openAbove) {
+    dd.style.top    = 'auto';
+    dd.style.bottom = (vvh - (rect.top - vvOffsetTop) + 4) + 'px';
+  } else {
+    dd.style.top    = (rect.bottom - vvOffsetTop + 4) + 'px';
+    dd.style.bottom = 'auto';
+  }
+
+  dd.innerHTML = locs.map(l => `
+    <div class="di" data-code="${l.code}">
+      <div class="di-ic" style="background:${tC(l.loc_type)}22">${tE(l.loc_type)}</div>
+      <div><div class="di-n">${l.name}</div><div class="di-f">${l.floor_label}</div></div>
+      <div class="di-a">›</div>
+    </div>`).join('');
+
+  dd.querySelectorAll('.di').forEach(item => {
+    const pick = () => {
+      const loc = locs.find(l => l.code === item.dataset.code);
+      if (loc) { inp.value = loc.name; inp.dataset.code = loc.code; dd.classList.remove('open'); onPick(loc); }
+    };
+    item.addEventListener('mousedown', e => { e.preventDefault(); pick(); });
+    item.addEventListener('touchend',  e => { e.preventDefault(); pick(); });
+  });
+
+  dd.classList.add('open');
+}
+
+// Reposition all open dropdowns when keyboard resizes viewport
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    document.querySelectorAll('.drop.open').forEach(dd => dd.classList.remove('open'));
+  });
+}
+
+function setupSearch(inpId, ddId, onPick, excludeFrom = true) {
+  const inp = document.getElementById(inpId);
+  const dd  = document.getElementById(ddId);
+  if (!inp || !dd) return;
+
+  inp.addEventListener('input', () => {
+    const q = inp.value.trim().toLowerCase();
+    if (!q) { dd.classList.remove('open'); return; }
+    const hits = LOCATIONS.filter(l =>
+      l.loc_type !== 'junction' &&
+      !(excludeFrom && l.code === fromCode) &&
+      (l.name.toLowerCase().includes(q) || l.code.toLowerCase().includes(q))
+    ).slice(0, 8);
+    showDrop(inp, dd, hits, onPick);
+  });
+
+  inp.addEventListener('blur', () => {
+    // Small delay so mousedown on item fires first
+    setTimeout(() => dd.classList.remove('open'), 150);
+  });
+
+  // Close others when this opens
+  inp.addEventListener('focus', () => {
+    document.querySelectorAll('.drop').forEach(d => { if (d !== dd) d.classList.remove('open'); });
+  });
+}
+
+const setFromLoc = loc => {
+  fromCode = loc.code;
+  ['from-inp','from-inp-m'].forEach(id => { const e = document.getElementById(id); if(e){ e.value = loc.name; e.dataset.code = loc.code; }});
+  redraw(); maybeRoute();
+};
+
+const setToLoc = loc => {
+  toCode = loc.code;
+  ['to-inp','to-inp-m'].forEach(id => { const e = document.getElementById(id); if(e){ e.value = loc.name; e.dataset.code = loc.code; }});
+  redraw(); maybeRoute();
+};
+
+setupSearch('from-inp',   'from-dd',   setFromLoc, false);
+setupSearch('to-inp',     'to-dd',     setToLoc);
+setupSearch('from-inp-m', 'from-dd-m', setFromLoc, false);
+setupSearch('to-inp-m',   'to-dd-m',   setToLoc);
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.sw') && !e.target.closest('.drop')) closeAllDrops();
+});
+
+/* ═══ QUICK FIND ═══ */
+function quickFind(type) {
+  const hits = LOCATIONS.filter(l => l.loc_type === type && l.code !== fromCode);
+  if (!hits.length) { toast('Not found in this mall'); return; }
+  const sorted = hits.sort((a,b) => Math.abs(a.floor_number - activeFloor) - Math.abs(b.floor_number - activeFloor));
+  if (sorted.length === 1) { setToLoc(sorted[0]); return; }
+  // Show dropdown under the "to" input
+  const mob = window.innerWidth <= 700;
+  const inp = document.getElementById(mob ? 'to-inp-m' : 'to-inp');
+  const dd  = document.getElementById(mob ? 'to-dd-m'  : 'to-dd');
+  if (inp) inp.value = '';
+  showDrop(inp, dd, sorted.slice(0, 8), loc => setToLoc(loc));
+}
+
+/* ═══ ROUTING ═══ */
+function maybeRoute() { if (fromCode && toCode) fetchRoute(); }
+
+async function fetchRoute() {
+  showSpin(true); hideErr();
+  try {
+    const res  = await fetch(`/api/route/${MALL_SLUG}/?from=${fromCode}&to=${toCode}`);
+    const data = await res.json();
+    showSpin(false);
+    if (!data.ok) { showErr(data.error); return; }
+    routeData = data;
+    renderRoute(data);
+    if (data.floors_visited?.length) setFloor(data.floors_visited[0]);
+    // On mobile: expand sheet to show route steps
+    if (window.innerWidth <= 700) {
+      openSheet();
+    }
+  } catch(e) { showSpin(false); showErr('Network error — server running?'); }
+}
+
+function renderRoute(d) {
+  const fn = LOCATIONS.find(l => l.code === fromCode)?.name || 'Start';
+  const tn = LOCATIONS.find(l => l.code === toCode)?.name   || 'Destination';
+  const stats = `
+    <div class="rs"><div class="rsn">${d.est_minutes}</div><div class="rsl">Min</div></div>
+    <div class="rs"><div class="rsn">${d.total_steps}</div><div class="rsl">Stops</div></div>
+    <div class="rs"><div class="rsn">${d.floors_visited.length}</div><div class="rsl">Floors</div></div>`;
+
+  const vis = d.steps.filter(s => s.loc_type !== 'junction' || s.is_floor_change);
+  const stepsHtml = vis.map((s, i, a) => {
+    const isF = i === 0, isL = i === a.length - 1;
+    let dc = 'd-m', ic = '●';
+    if (isF)  { dc = 'd-s'; ic = '🟢'; }
+    else if (isL) { dc = 'd-e'; ic = '🏁'; }
+    else if (s.walk_type === 'lift')      { dc = 'd-l';  ic = '🛗'; }
+    else if (s.walk_type === 'escalator' || s.walk_type === 'stairs') { dc = 'd-es'; ic = '↗'; }
+    const fc = s.is_floor_change ? '<span class="sbg fc">Floor change</span>' : '';
+    return `
+      <li class="step" onclick="setFloor(${s.floor_number})">
+        <div class="scol">
+          <div class="sdot ${dc}">${ic}</div>
+          ${!isL ? '<div class="sline"></div>' : ''}
+        </div>
+        <div class="sb">
+          <div class="sn">${s.name}</div>
+          <div class="sinstr">${s.instruction}</div>
+          <span class="sbg">${s.floor_label}</span>${fc}
+        </div>
+      </li>`;
+  }).join('');
+
+  [['rbox-d','rtitle-d','rstats-d','steps-d'],
+   ['rbox-m','rtitle-m','rstats-m','steps-m']].forEach(([rb,rt,rs,sl]) => {
+    const box = document.getElementById(rb); if (!box) return;
+    box.style.display = 'block';
+    document.getElementById(rt).textContent = `${fn} → ${tn}`;
+    document.getElementById(rs).innerHTML = stats;
+    document.getElementById(sl).innerHTML = stepsHtml;
+  });
+  redraw();
+}
+
+function clearRoute() {
+  routeData = null; toCode = '';
+  ['to-inp','to-inp-m'].forEach(id => { const e = document.getElementById(id); if(e){ e.value=''; e.dataset.code=''; }});
+  ['rbox-d','rbox-m'].forEach(id => { const e = document.getElementById(id); if(e) e.style.display='none'; });
+  hideErr(); redraw();
+}
+
+/* ═══ FLOOR TABS ═══ */
+function setFloor(n) {
+  activeFloor = n;
+  document.querySelectorAll('.ftab').forEach(t => t.classList.toggle('active', parseInt(t.dataset.floor) === n));
+  const fl = FLOORS.find(f => f.number === n);
+  document.getElementById('hfl').textContent = fl?.label || 'Floor ' + n;
+  if (aniF) { cancelAnimationFrame(aniF); aniF = null; }
+  redraw();
+}
+
+/* ═══ CANVAS ═══ */
+const CV  = document.getElementById('cv');
+const ctx = CV.getContext('2d');
+
+function resize() {
+  const wrap = document.getElementById('cwrap');
+  CV.width  = wrap.clientWidth;
+  CV.height = wrap.clientHeight;
+  redraw();
+}
+
+// Mouse pan
+CV.addEventListener('mousedown', e => { if(e.button!==0)return; isPan=true; lastPan={x:e.clientX,y:e.clientY}; CV.style.cursor='grabbing'; });
+CV.addEventListener('mousemove', e => { if(!isPan)return; panX+=e.clientX-lastPan.x; panY+=e.clientY-lastPan.y; lastPan={x:e.clientX,y:e.clientY}; redraw(); });
+CV.addEventListener('mouseup',   () => { isPan=false; CV.style.cursor='crosshair'; });
+CV.addEventListener('mouseleave',() => { isPan=false; CV.style.cursor='crosshair'; });
+
+// Scroll zoom
+CV.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f = e.deltaY < 0 ? 1.1 : 0.91;
+  const r = CV.getBoundingClientRect(), mx = e.clientX-r.left, my = e.clientY-r.top;
+  scale = Math.max(0.3, Math.min(6, scale * f));
+  panX = mx - (mx - panX) * f; panY = my - (my - panY) * f;
+  redraw();
+}, {passive:false});
+
+// Touch
+let lt = [];
+CV.addEventListener('touchstart', e => {
+  e.preventDefault();
+  lt = Array.from(e.touches).map(t => ({x:t.clientX,y:t.clientY}));
+  tspStart = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+  if (e.touches.length === 2)
+    pinchD = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+}, {passive:false});
+
+CV.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const ts = Array.from(e.touches);
+  if (ts.length === 2 && pinchD !== null) {
+    const nd = Math.hypot(ts[0].clientX-ts[1].clientX, ts[0].clientY-ts[1].clientY);
+    const f  = nd / pinchD;
+    const cx = (ts[0].clientX+ts[1].clientX)/2, cy = (ts[0].clientY+ts[1].clientY)/2;
+    const r  = CV.getBoundingClientRect();
+    scale = Math.max(0.3, Math.min(6, scale * f));
+    panX  = (cx-r.left) - ((cx-r.left) - panX) * f;
+    panY  = (cy-r.top)  - ((cy-r.top)  - panY) * f;
+    pinchD = nd;
+  } else if (ts.length === 1 && lt.length >= 1) {
+    panX += ts[0].clientX - lt[0].x;
+    panY += ts[0].clientY - lt[0].y;
+  }
+  lt = ts.map(t => ({x:t.clientX,y:t.clientY}));
+  redraw();
+}, {passive:false});
+
+CV.addEventListener('touchend', e => {
+  if (e.touches.length < 2) pinchD = null;
+  lt = Array.from(e.touches).map(t => ({x:t.clientX,y:t.clientY}));
+  // Tap = no significant movement
+  if (e.changedTouches.length === 1 && e.touches.length === 0) {
+    const t = e.changedTouches[0];
+    if (Math.hypot(t.clientX-tspStart.x, t.clientY-tspStart.y) < 10) handleTap(t.clientX, t.clientY);
+  }
+});
+CV.addEventListener('click', e => handleTap(e.clientX, e.clientY));
+
+function handleTap(cx, cy) {
+  const r  = CV.getBoundingClientRect();
+  const mx = (cx - r.left - panX) / scale;
+  const my = (cy - r.top  - panY) / scale;
+  const P  = 40, W = CV.width, H = CV.height;
+  const ml = LOCATIONS.filter(l => l.floor_number === activeFloor && l.loc_type !== 'junction');
+  let best = null, bd = 28/scale;
+  ml.forEach(l => {
+    const lx = P + (l.x_pct/100)*(W-P*2), ly = P + (l.y_pct/100)*(H-P*2);
+    const d  = Math.hypot(mx-lx, my-ly);
+    if (d < bd) { bd=d; best=l; }
+  });
+  if (!best) return;
+  if (!fromCode) { setFromLoc(best); toast('Start: ' + best.name); }
+  else           { setToLoc(best); }
+}
+
+function doZoom(f) {
+  const cx = CV.width/2, cy = CV.height/2;
+  scale = Math.max(0.3, Math.min(6, scale*f));
+  panX = cx - (cx-panX)*f; panY = cy - (cy-panY)*f;
+  redraw();
+}
+function resetView() { scale=1; panX=0; panY=0; redraw(); }
+
+/* ─── DRAW ─── */
+const imgCache = {};
+function getImg(url) {
+  if (!imgCache[url]) { const i = new Image(); i.src = url; i.onload = () => redraw(); imgCache[url] = i; }
+  return imgCache[url];
+}
+
+function redraw() {
+  const W = CV.width, H = CV.height;
+  if (!W || !H) return;
+  const P = 40;
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(panX, panY);
+  ctx.scale(scale, scale);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1/scale;
+  for(let x=0;x<W;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+
+  const tx = p => P + (p/100)*(W-P*2);
+  const ty = p => P + (p/100)*(H-P*2);
+  const fl = FLOORS.find(f => f.number === activeFloor);
+  const flLocs  = LOCATIONS.filter(l => l.floor_number === activeFloor);
+  const pathC   = routeData?.steps.map(s => s.code) || [];
+
+  // Floor map image background
+  if (fl?.map_img_url) {
+    const img = getImg(fl.map_img_url);
+    if (img.complete && img.naturalWidth) { ctx.globalAlpha=.22; ctx.drawImage(img,P,P,W-P*2,H-P*2); ctx.globalAlpha=1; }
+  }
+
+  // Edges
+  EDGES.forEach(e => {
+    if (e.from_floor !== activeFloor || e.to_floor !== activeFloor) return;
+    const a = LOCATIONS.find(l=>l.code===e.from_code), b = LOCATIONS.find(l=>l.code===e.to_code);
+    if (!a||!b) return;
+    ctx.beginPath(); ctx.strokeStyle='rgba(255,255,255,0.07)'; ctx.lineWidth=1.5/scale; ctx.setLineDash([]);
+    ctx.moveTo(tx(a.x_pct),ty(a.y_pct)); ctx.lineTo(tx(b.x_pct),ty(b.y_pct)); ctx.stroke();
+  });
+
+  // Route path
+  if (routeData && pathC.length > 1) {
+    const onF = routeData.steps.filter(s => s.floor_number === activeFloor);
+    if (onF.length >= 2) {
+      ctx.beginPath(); ctx.strokeStyle='#6c63ff'; ctx.lineWidth=4/scale;
+      ctx.setLineDash([10/scale, 6/scale]); ctx.lineDashOffset = -(Date.now()/40)%16;
+      ctx.lineCap='round'; ctx.lineJoin='round';
+      onF.forEach((s,i) => { i===0 ? ctx.moveTo(tx(s.x_pct),ty(s.y_pct)) : ctx.lineTo(tx(s.x_pct),ty(s.y_pct)); });
+      ctx.stroke(); ctx.setLineDash([]);
+      aniF = requestAnimationFrame(redraw);
+    }
+  }
+
+  // Location dots
+  flLocs.forEach(loc => {
+    const x=tx(loc.x_pct), y=ty(loc.y_pct);
+    const isF=loc.code===fromCode, isT=loc.code===toCode, isP=pathC.includes(loc.code), isJ=loc.loc_type==='junction';
+    if (isJ && !isP) { ctx.beginPath(); ctx.arc(x,y,2.5/scale,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,.1)'; ctx.fill(); return; }
+    // Glow
+    if (isF||isT) {
+      const g = ctx.createRadialGradient(x,y,0,x,y,22/scale);
+      g.addColorStop(0, isF?'rgba(0,230,118,.22)':'rgba(255,107,53,.22)'); g.addColorStop(1,'transparent');
+      ctx.beginPath(); ctx.arc(x,y,22/scale,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    }
+    const r = (isF||isT) ? 9/scale : isP ? 7/scale : 5/scale;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle = isF?'#00e676': isT?'#ff6b35': isP?'#6c63ff': tC(loc.loc_type); ctx.fill();
+    if (isF||isT||isP) { ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=1.5/scale; ctx.stroke(); }
+    // Label
+    const showL = isF||isT||isP||['entrance','lift','escalator','info','atm','parking','emergency'].includes(loc.loc_type);
+    if (showL) {
+      const lbl = loc.name.length>16 ? loc.name.slice(0,15)+'…' : loc.name;
+      const fs  = 10/scale;
+      ctx.font = `${isF||isT?'700':'500'} ${fs}px "Segoe UI",sans-serif`;
+      const tw  = ctx.measureText(lbl).width;
+      ctx.fillStyle='rgba(11,12,20,.82)';
+      rr(ctx, x-tw/2-4/scale, y-26/scale, tw+8/scale, 14/scale, 3/scale); ctx.fill();
+      ctx.fillStyle = isF?'#00e676': isT?'#ff6b35': isP?'#a5b4fc':'rgba(255,255,255,.82)';
+      ctx.textAlign='center'; ctx.fillText(lbl, x, y-15/scale);
+    }
+  });
+
+  // Watermark
+  ctx.font=`bold ${11/scale}px "Segoe UI",sans-serif`; ctx.fillStyle='rgba(255,255,255,.07)'; ctx.textAlign='left';
+  ctx.fillText((fl?.label||'').toUpperCase(), 12/scale, 18/scale);
+  ctx.restore();
+}
+
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+function tC(t){const m={shop:'#a78bfa',restaurant:'#fb923c',lift:'#60a5fa',escalator:'#fbbf24',stairs:'#fbbf24',restroom:'#34d399',entrance:'#4ade80',atm:'#f472b6',parking:'#94a3b8',info:'#67e8f9',emergency:'#f87171'};return m[t]||'#6b7280'}
+function tE(t){const m={shop:'🛍️',restaurant:'🍽️',lift:'🛗',escalator:'↗️',stairs:'🪜',restroom:'🚻',entrance:'🚪',atm:'💳',parking:'🅿️',info:'ℹ️',emergency:'🚨'};return m[t]||'📍'}
+
+/* ═══ UTILS ═══ */
+let ttmr;
+function toast(msg,d=2500){const e=document.getElementById('toast');e.textContent=msg;e.classList.add('show');clearTimeout(ttmr);ttmr=setTimeout(()=>e.classList.remove('show'),d)}
+function showSpin(on){document.getElementById('spinner').classList.toggle('show',on)}
+function showErr(msg){['rerr-d','rerr-m'].forEach(id=>{const e=document.getElementById(id);if(e){e.textContent='⚠️ '+msg;e.classList.add('show')}})}
+function hideErr(){document.querySelectorAll('.rerr').forEach(e=>e.classList.remove('show'))}
+
+window.addEventListener('resize', () => { if(aniF){cancelAnimationFrame(aniF);aniF=null;} resize(); });
+resize();
+if (MY_CODE) toast('📍 Location detected! Choose your destination.');
+</script>
+</body>
+</html>

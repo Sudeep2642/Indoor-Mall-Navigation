@@ -1,0 +1,101 @@
+{% extends 'navigation/base.html' %}
+{% block title %}MallNav — Indoor Navigation{% endblock %}
+{% block extra_css %}
+<style>
+.hero{background:linear-gradient(135deg,#0f1019 0%,#1a1225 100%);border-bottom:1px solid var(--border);padding:4rem 0 3.5rem;text-align:center}
+.hero h1{font-size:2.8rem;font-weight:900;background:linear-gradient(135deg,#fff 0%,#a5b4fc 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:.75rem}
+.hero p{font-size:1.05rem;color:var(--muted);max-width:520px;margin:0 auto 2rem}
+.hero-btns{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.mall-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:all .2s;display:block;color:inherit}
+.mall-card:hover{transform:translateY(-4px);border-color:var(--primary);text-decoration:none}
+.mall-card-img{height:140px;background:linear-gradient(135deg,var(--primary) 0%,#a855f7 100%);display:flex;align-items:center;justify-content:center;font-size:3rem}
+.mall-card-img img{width:100%;height:100%;object-fit:cover}
+.mall-card-body{padding:1.1rem}
+.mall-card-name{font-size:1rem;font-weight:700;margin-bottom:.25rem}
+.mall-card-city{font-size:.78rem;color:var(--muted);margin-bottom:.65rem}
+.section{padding:3rem 0}
+.section-title{font-size:1.4rem;font-weight:800;margin-bottom:.4rem}
+.section-sub{color:var(--muted);font-size:.9rem;margin-bottom:1.75rem}
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.25rem}
+.feature{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;text-align:center}
+.feature-icon{font-size:2rem;margin-bottom:.75rem}
+.feature-title{font-weight:700;margin-bottom:.4rem}
+.feature-desc{font-size:.82rem;color:var(--muted);line-height:1.5}
+</style>
+{% endblock %}
+{% block content %}
+<div class="hero">
+  <div class="container">
+    <h1>🏬 MallNav</h1>
+    <p>Smart Indoor Navigation for Shopping Malls. Scan a QR code, pick your destination, get step-by-step directions.</p>
+    <div class="hero-btns">
+      {% if user.is_authenticated %}
+      <a href="/dashboard/" class="btn btn-primary">Dashboard</a>
+      <a href="/dashboard/mall/add/" class="btn btn-ghost">+ Add Mall</a>
+      {% else %}
+      <a href="/login/" class="btn btn-primary">Admin Login</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<section class="section">
+  <div class="container">
+    <div class="section-title">Active Malls</div>
+    <div class="section-sub">{{ malls|length }} mall{{ malls|length|pluralize }} on the platform</div>
+    {% if malls %}
+    <div class="grid-3">
+      {% for mall in malls %}
+      <a href="/navigate/{{ mall.slug }}/" class="mall-card">
+        <div class="mall-card-img">
+          {% if mall.logo %}<img src="{{ mall.logo.url }}" alt="{{ mall.name }}">{% else %}🏬{% endif %}
+        </div>
+        <div class="mall-card-body">
+          <div class="mall-card-name">{{ mall.name }}</div>
+          <div class="mall-card-city">📍 {{ mall.city }}</div>
+          <span class="badge badge-primary">{{ mall.total_floors }} floors</span>
+          <span class="badge badge-success" style="margin-left:.3rem">Active</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card" style="text-align:center;padding:3rem">
+      <div style="font-size:3rem;margin-bottom:1rem">🏬</div>
+      <div style="font-size:1rem;font-weight:600;margin-bottom:.5rem">No malls yet</div>
+      <div style="color:var(--muted);margin-bottom:1.5rem">Login as admin to add your first mall.</div>
+      <a href="/login/" class="btn btn-primary">Login</a>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="section" style="background:var(--surf);border-top:1px solid var(--border)">
+  <div class="container">
+    <div class="section-title" style="text-align:center">How It Works</div>
+    <div class="section-sub" style="text-align:center">3 steps for visitors, zero app downloads</div>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature-icon">📷</div>
+        <div class="feature-title">1. Scan QR</div>
+        <div class="feature-desc">Visitor scans a QR code sticker placed anywhere in the mall. System instantly knows their location.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔍</div>
+        <div class="feature-title">2. Pick Destination</div>
+        <div class="feature-desc">Search or tap a quick button — Restroom, Food Court, specific shop, ATM, Exit, and more.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🗺️</div>
+        <div class="feature-title">3. Follow Route</div>
+        <div class="feature-desc">Step-by-step directions appear with floor-by-floor path shown on the interactive map.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🏬</div>
+        <div class="feature-title">Multi-Mall</div>
+        <div class="feature-desc">One platform, unlimited malls. Each mall has its own map, QR codes, and analytics.</div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

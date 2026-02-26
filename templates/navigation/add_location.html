@@ -1,0 +1,365 @@
+{% extends 'navigation/base.html' %}
+{% block title %}Add Location — {{ mall.name }}{% endblock %}
+{% block content %}
+<style>
+.al-wrap{display:grid;grid-template-columns:380px 1fr;gap:0;height:calc(100vh - 58px);overflow:hidden}
+@media(max-width:800px){.al-wrap{grid-template-columns:1fr;height:auto}}
+
+.al-panel{background:var(--surf);border-right:1px solid var(--border);overflow-y:auto;padding:1.25rem}
+.al-panel::-webkit-scrollbar{width:3px}
+.al-panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1)}
+
+.al-map{position:relative;overflow:hidden;background:#0b0c14;display:flex;flex-direction:column}
+@media(max-width:800px){.al-map{height:55vw;min-height:260px}}
+.al-map-top{flex-shrink:0;padding:.5rem .875rem;background:var(--surf);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.al-map-top span{font-size:.75rem;color:var(--muted)}
+.al-canvas-wrap{flex:1;position:relative;overflow:hidden;cursor:crosshair}
+
+.xy-chip{
+  display:inline-flex;align-items:center;gap:.4rem;
+  background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);
+  border-radius:8px;padding:.45rem .75rem;font-size:.82rem;
+  color:#a5b4fc;font-family:monospace;cursor:pointer;transition:all .15s;
+  width:100%;justify-content:center;margin-bottom:.5rem;
+}
+.xy-chip:hover{background:rgba(108,99,255,.25)}
+.xy-chip.placed{background:rgba(0,230,118,.12);border-color:rgba(0,230,118,.3);color:var(--green)}
+.xy-chip .ico{font-size:1rem}
+
+.coord-read{position:absolute;bottom:.6rem;left:.6rem;background:rgba(19,20,31,.9);border:1px solid rgba(255,255,255,.08);padding:.28rem .6rem;border-radius:20px;font-size:.68rem;color:var(--muted);font-family:monospace;pointer-events:none}
+.map-hint-txt{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;color:rgba(255,255,255,.15);font-size:.85rem}
+</style>
+
+<div class="al-wrap">
+
+  <!-- FORM PANEL -->
+  <div class="al-panel">
+    <div style="font-size:.75rem;color:var(--muted);margin-bottom:.5rem">
+      <a href="/dashboard/">Dashboard</a> ›
+      <a href="/dashboard/{{ mall.slug }}/">{{ mall.name }}</a> ›
+      Add Location
+    </div>
+    <h1 style="font-size:1.25rem;font-weight:800;margin-bottom:.2rem">📍 Add Location</h1>
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:1.25rem;line-height:1.5">
+      Fill the form, then <strong style="color:#a5b4fc">click the map</strong> on the right to set the exact position. No guessing needed.
+    </p>
+
+    <form method="post" id="loc-form">
+      {% csrf_token %}
+
+      <!-- Name -->
+      <div class="form-group">
+        <label>Location Name *</label>
+        <input type="text" name="name" id="f-name" class="form-control"
+          placeholder="e.g. Zara, Main Entrance, Lift A" required>
+      </div>
+
+      <!-- Code + Type -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group">
+          <label>Unique Code *</label>
+          <input type="text" name="code" id="f-code" class="form-control"
+            placeholder="GF_ZARA" required style="font-family:monospace;font-size:.85rem">
+          <small style="color:var(--muted);font-size:.7rem">Auto-generated from name</small>
+        </div>
+        <div class="form-group">
+          <label>Type *</label>
+          <select name="loc_type" id="f-type" class="form-control" onchange="redraw()">
+            {% for val,label in type_choices %}
+            <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Floor -->
+      <div class="form-group">
+        <label>Floor *</label>
+        <select name="floor_id" id="f-floor" class="form-control" onchange="onFloorChange()">
+          {% for fl in floors %}
+          <option value="{{ fl.id }}" data-num="{{ fl.number }}" data-img="{% if fl.map_image %}{{ fl.map_image.url }}{% endif %}">
+            {{ fl.label }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Position — click to place -->
+      <div class="form-group">
+        <label>Position on Map *</label>
+        <div class="xy-chip" id="xy-chip" onclick="document.querySelector('.al-canvas-wrap').scrollIntoView({behavior:'smooth'})">
+          <span class="ico">📍</span>
+          <span id="xy-label">Click the map on the right to set position</span>
+        </div>
+        <!-- Hidden real inputs -->
+        <input type="hidden" name="x_pct" id="f-x" value="50">
+        <input type="hidden" name="y_pct" id="f-y" value="50">
+        <!-- Visual fallback inputs (editable) -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+          <div>
+            <label style="font-size:.68rem;color:var(--muted)">X % (left→right)</label>
+            <input type="number" id="v-x" class="form-control" value="50" min="0" max="100" step="0.5"
+              oninput="syncXY('x')" style="font-size:.82rem">
+          </div>
+          <div>
+            <label style="font-size:.68rem;color:var(--muted)">Y % (top→bottom)</label>
+            <input type="number" id="v-y" class="form-control" value="50" min="0" max="100" step="0.5"
+              oninput="syncXY('y')" style="font-size:.82rem">
+          </div>
+        </div>
+        <div style="font-size:.68rem;color:var(--muted);margin-top:.3rem;line-height:1.5">
+          X: 0=left edge → 100=right edge &nbsp;·&nbsp; Y: 0=top → 100=bottom
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Description <span style="color:var(--muted)">(optional)</span></label>
+        <textarea name="description" class="form-control" rows="2" placeholder="Optional notes"></textarea>
+      </div>
+
+      <!-- Existing locations on this floor as reference -->
+      <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:.65rem .875rem;margin-bottom:1rem;font-size:.75rem;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--text)">💡 Tips</strong><br>
+        • Click the map to place — the dot moves as you click<br>
+        • Add <strong>junction</strong> type at corridor intersections (invisible waypoints)<br>
+        • Add lifts on every floor for cross-floor routing<br>
+        • Use <a href="/dashboard/{{ mall.slug }}/" style="color:#a5b4fc">Map Preview</a> to verify positions after saving
+      </div>
+
+      <div style="display:flex;gap:.75rem">
+        <button type="submit" class="btn btn-primary">Add Location</button>
+        <a href="/dashboard/{{ mall.slug }}/" class="btn btn-ghost">Cancel</a>
+        <a href="/dashboard/floor/{{ floors.0.id }}/ai-setup/" class="btn btn-ghost"
+           style="margin-left:auto;font-size:.78rem">🤖 Use AI Setup instead</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- LIVE MAP -->
+  <div class="al-map">
+    <div class="al-map-top">
+      <span id="map-floor-label">{{ floors.0.label }}</span>
+      <span>Click to place the dot · Scroll to zoom</span>
+    </div>
+    <div class="al-canvas-wrap" id="cv-wrap">
+      <canvas id="cv"></canvas>
+      <div class="coord-read" id="coord-read">X: — Y: —</div>
+      <div class="map-hint-txt" id="map-hint">
+        🗺️ Click anywhere to place location
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Floor map images
+const floorImgs = {
+  {% for fl in floors %}
+  "{{ fl.id }}": "{% if fl.map_image %}{{ fl.map_image.url }}{% endif %}",
+  {% endfor %}
+};
+// Existing locations per floor for reference
+const existingLocs = {{ existing_locs_json|safe }};
+
+const cv  = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let bgImg=null, placed=false;
+let px=50, py=50;  // current position %
+let scale=1, panX=0, panY=0, isPan=false, lastPan={x:0,y:0};
+
+function resize(){
+  const w=document.getElementById('cv-wrap');
+  cv.width=w.clientWidth; cv.height=w.clientHeight; redraw();
+}
+window.addEventListener('resize',resize);
+
+function onFloorChange(){
+  const sel=document.getElementById('f-floor');
+  const opt=sel.options[sel.selectedIndex];
+  document.getElementById('map-floor-label').textContent=opt.text;
+  const img=floorImgs[sel.value];
+  if(img){loadBg(img);}else{bgImg=null;redraw();}
+  // reset ai-setup link
+  const ai=document.querySelector('a[href*="ai-setup"]');
+  // find floor id from option value
+  const fid=sel.value;
+  if(ai) ai.href='/dashboard/floor/'+fid+'/ai-setup/';
+}
+
+function loadBg(url){
+  bgImg=new Image(); bgImg.onload=redraw; bgImg.src=url;
+}
+
+// Load initial floor map
+const initImg=Object.values(floorImgs)[0];
+if(initImg) loadBg(initImg);
+resize();
+
+// Auto-generate code from name
+document.getElementById('f-name').addEventListener('input',function(){
+  const sel=document.getElementById('f-floor');
+  const opt=sel.options[sel.selectedIndex];
+  const num=opt.text.match(/\d+/)?.[0]||'';
+  const prefix=opt.dataset.num==='0'?'GF':(num?`F${num}`:'GF');
+  document.getElementById('f-code').value=prefix+'_'+this.value.toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_|_$/g,'');
+});
+
+// Sync manual X/Y inputs → map
+function syncXY(axis){
+  const x=parseFloat(document.getElementById('v-x').value)||50;
+  const y=parseFloat(document.getElementById('v-y').value)||50;
+  px=Math.max(0,Math.min(100,x));
+  py=Math.max(0,Math.min(100,y));
+  document.getElementById('f-x').value=px;
+  document.getElementById('f-y').value=py;
+  placed=true;
+  updateChip();
+  redraw();
+}
+
+function updateChip(){
+  const chip=document.getElementById('xy-chip');
+  const lbl=document.getElementById('xy-label');
+  chip.className='xy-chip'+(placed?' placed':'');
+  lbl.textContent=placed?`X: ${px.toFixed(1)}%  Y: ${py.toFixed(1)}%`:'Click the map on the right to set position';
+}
+
+// Canvas interaction
+cv.addEventListener('mousedown',e=>{
+  isPan=true; lastPan={x:e.clientX,y:e.clientY};
+});
+cv.addEventListener('mousemove',e=>{
+  const {wx,wy}=screenToWorld(e);
+  const xp=Math.max(0,Math.min(100,wx/cv.width*100));
+  const yp=Math.max(0,Math.min(100,wy/cv.height*100));
+  document.getElementById('coord-read').textContent=`X: ${xp.toFixed(1)}%  Y: ${yp.toFixed(1)}%`;
+
+  if(isPan){
+    const dx=e.clientX-lastPan.x, dy=e.clientY-lastPan.y;
+    // Small movement = click intent, large = pan
+    if(Math.abs(dx)>5||Math.abs(dy)>5){
+      panX+=dx; panY+=dy; lastPan={x:e.clientX,y:e.clientY}; redraw();
+    }
+  }
+});
+cv.addEventListener('mouseup',e=>{
+  const dx=e.clientX-lastPan.x, dy=e.clientY-lastPan.y;
+  if(Math.abs(dx)<5&&Math.abs(dy)<5){
+    // It was a click, not a drag
+    const {wx,wy}=screenToWorld(e);
+    px=parseFloat(Math.max(0,Math.min(100,wx/cv.width*100)).toFixed(1));
+    py=parseFloat(Math.max(0,Math.min(100,wy/cv.height*100)).toFixed(1));
+    document.getElementById('f-x').value=px;
+    document.getElementById('f-y').value=py;
+    document.getElementById('v-x').value=px;
+    document.getElementById('v-y').value=py;
+    placed=true;
+    updateChip();
+    document.getElementById('map-hint').style.display='none';
+    redraw();
+  }
+  isPan=false;
+});
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const f=e.deltaY<0?1.12:.9;
+  const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  scale=Math.max(.3,Math.min(5,scale*f));
+  panX=mx-(mx-panX)*f; panY=my-(my-panY)*f; redraw();
+},{passive:false});
+
+function screenToWorld(e){
+  const r=cv.getBoundingClientRect();
+  return{wx:(e.clientX-r.left-panX)/scale, wy:(e.clientY-r.top-panY)/scale};
+}
+
+function tC(t){const m={shop:'#a78bfa',restaurant:'#fb923c',lift:'#60a5fa',escalator:'#fbbf24',stairs:'#fbbf24',restroom:'#34d399',entrance:'#4ade80',atm:'#f472b6',parking:'#94a3b8',info:'#67e8f9',emergency:'#f87171',junction:'#4b5563'};return m[t]||'#6b7280'}
+
+function redraw(){
+  const W=cv.width,H=cv.height;
+  if(!W||!H)return;
+  const P=40;
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(panX,panY);
+  ctx.scale(scale,scale);
+
+  ctx.fillStyle='#0b0c14'; ctx.fillRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.lineWidth=1/scale;
+  for(let x=0;x<W;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+
+  // Floor map bg
+  if(bgImg&&bgImg.complete&&bgImg.naturalWidth){
+    ctx.globalAlpha=.28; ctx.drawImage(bgImg,P,P,W-P*2,H-P*2); ctx.globalAlpha=1;
+  }
+
+  const tx=p=>P+(p/100)*(W-P*2);
+  const ty=p=>P+(p/100)*(H-P*2);
+
+  // Existing locations (reference, dimmed)
+  const floorSel=document.getElementById('f-floor');
+  const floorId=floorSel?parseInt(floorSel.value):null;
+  const refs=(existingLocs[floorId]||[]);
+  refs.forEach(l=>{
+    const x=tx(l.x_pct),y=ty(l.y_pct);
+    ctx.beginPath(); ctx.arc(x,y,5/scale,0,Math.PI*2);
+    ctx.fillStyle=tC(l.type)+'88'; ctx.fill();
+    if(l.type!=='junction'){
+      const lbl=l.name.length>14?l.name.slice(0,13)+'…':l.name;
+      ctx.font=`400 ${9/scale}px "Segoe UI",sans-serif`;
+      ctx.fillStyle='rgba(255,255,255,.45)';
+      ctx.textAlign='center'; ctx.fillText(lbl,x,y-9/scale);
+    }
+  });
+
+  // NEW location dot
+  if(placed){
+    const x=tx(px),y=ty(py);
+    const type=document.getElementById('f-type')?.value||'shop';
+    // Glow
+    const g=ctx.createRadialGradient(x,y,0,x,y,22/scale);
+    g.addColorStop(0,tC(type)+'55'); g.addColorStop(1,'transparent');
+    ctx.beginPath(); ctx.arc(x,y,22/scale,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    // Dot
+    ctx.beginPath(); ctx.arc(x,y,10/scale,0,Math.PI*2);
+    ctx.fillStyle=tC(type); ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=2/scale; ctx.stroke();
+    // Name label
+    const name=document.getElementById('f-name')?.value||'New Location';
+    ctx.font=`700 ${11/scale}px "Segoe UI",sans-serif`;
+    const tw=ctx.measureText(name).width;
+    ctx.fillStyle='rgba(11,12,20,.9)';
+    rr(ctx,x-tw/2-5/scale,y-28/scale,tw+10/scale,16/scale,4/scale); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.fillText(name,x,y-15/scale);
+    // Crosshair
+    ctx.strokeStyle='rgba(255,255,255,.2)'; ctx.lineWidth=1/scale; ctx.setLineDash([4/scale,4/scale]);
+    ctx.beginPath(); ctx.moveTo(P,y); ctx.lineTo(W-P,y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x,P); ctx.lineTo(x,H-P); ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    // Gentle pulse at center to invite click
+    const cx=tx(50),cy=ty(50);
+    ctx.beginPath(); ctx.arc(cx,cy,8/scale,0,Math.PI*2);
+    ctx.fillStyle='rgba(108,99,255,.3)'; ctx.fill();
+    ctx.strokeStyle='rgba(108,99,255,.5)'; ctx.lineWidth=1.5/scale; ctx.stroke();
+  }
+
+  // Legend
+  ctx.font=`400 ${9/scale}px "Segoe UI",sans-serif`;
+  ctx.fillStyle='rgba(255,255,255,.2)';
+  ctx.textAlign='left';
+  ctx.fillText('Existing locations (dim) · New location (bright)',P+4,H-P-4);
+  ctx.restore();
+}
+
+// Update dot when name or type changes
+document.getElementById('f-name').addEventListener('input',redraw);
+document.getElementById('f-type').addEventListener('change',redraw);
+
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+</script>
+{% endblock %}
