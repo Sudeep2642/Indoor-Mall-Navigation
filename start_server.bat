@@ -4,7 +4,7 @@ REM  MallNav - Start Server with Anthropic API Key
 REM  Edit the line below with your actual API key, then double-click this file
 REM ─────────────────────────────────────────────────────────────
 
-set ANTHROPIC_API_KEY=your-api-key-here
+set ANTHROPIC_API_KEY=sk-ant-api03-YOUR-KEY-HERE
 REM Optionally override other settings:
 REM set SECRET_KEY=your-secret-key
 REM set DEBUG=True
