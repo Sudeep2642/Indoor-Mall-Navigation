@@ -29,6 +29,7 @@ urlpatterns = [
 
     path('dashboard/floor/<int:floor_id>/upload/', views.upload_floor_map, name='upload_floor_map'),
     path('dashboard/floor/<int:floor_id>/delete-map/', views.delete_floor_map, name='delete_floor_map'),
+    path('dashboard/floor/<int:floor_id>/toggle-map-visibility/', views.toggle_floor_map_visibility, name='toggle_floor_map_visibility'),
     path('dashboard/floor/<int:floor_id>/ai-setup/', views.ai_floor_setup, name='ai_floor_setup'),
     path('dashboard/floor/<int:floor_id>/ai-analyse/', views.ai_analyse_floor, name='ai_analyse_floor'),
     path('dashboard/floor/<int:floor_id>/ai-save/', views.ai_save_locations, name='ai_save_locations'),

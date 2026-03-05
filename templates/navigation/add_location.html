@@ -72,6 +72,17 @@
         </div>
       </div>
 
+      <!-- Area Size -->
+      <div class="form-group">
+        <label>Area Size <span style="color:var(--muted)">(how much floor space it covers)</span></label>
+        <select name="area_size" id="f-area" class="form-control" onchange="redraw()">
+          {% for val,label in area_choices %}
+          <option value="{{ val }}" {% if val == 'md' %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <small style="color:var(--muted);font-size:.7rem">Controls the shape size on the map — bigger = more visible territory ring</small>
+      </div>
+
       <!-- Floor -->
       <div class="form-group">
         <label>Floor *</label>
@@ -306,35 +317,54 @@ function redraw(){
   const refs=(existingLocs[floorId]||[]);
   refs.forEach(l=>{
     const x=tx(l.x_pct),y=ty(l.y_pct);
-    ctx.beginPath(); ctx.arc(x,y,5/scale,0,Math.PI*2);
-    ctx.fillStyle=tC(l.type)+'88'; ctx.fill();
+    const r = 5/scale;
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle=tC(l.type)+'88';
+    drawShape(ctx, l.type, x, y, r); ctx.fill();
+    ctx.globalAlpha = 1;
     if(l.type!=='junction'){
       const lbl=l.name.length>14?l.name.slice(0,13)+'…':l.name;
       ctx.font=`400 ${9/scale}px "Segoe UI",sans-serif`;
       ctx.fillStyle='rgba(255,255,255,.45)';
-      ctx.textAlign='center'; ctx.fillText(lbl,x,y-9/scale);
+      ctx.textAlign='center'; ctx.fillText(lbl,x,y-8/scale);
     }
   });
 
-  // NEW location dot
+  // NEW location shape
   if(placed){
     const x=tx(px),y=ty(py);
     const type=document.getElementById('f-type')?.value||'shop';
+    const areaSel=document.getElementById('f-area')?.value||'md';
+    const areaR = {'xs':4,'sm':6,'md':8,'lg':11,'xl':15}[areaSel]||8;
+    const r = (areaR+2)/scale;
+    // Territory ring for LG/XL
+    if(areaSel==='xl'||areaSel==='lg'){
+      const ringR=(areaSel==='xl'?r*2.2:r*1.7);
+      ctx.beginPath(); ctx.arc(x,y,ringR,0,Math.PI*2);
+      ctx.strokeStyle=tC(type)+'44'; ctx.lineWidth=2/scale;
+      ctx.setLineDash([3/scale,3/scale]); ctx.stroke(); ctx.setLineDash([]);
+    }
     // Glow
-    const g=ctx.createRadialGradient(x,y,0,x,y,22/scale);
+    const g=ctx.createRadialGradient(x,y,0,x,y,r*2.8);
     g.addColorStop(0,tC(type)+'55'); g.addColorStop(1,'transparent');
-    ctx.beginPath(); ctx.arc(x,y,22/scale,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
-    // Dot
-    ctx.beginPath(); ctx.arc(x,y,10/scale,0,Math.PI*2);
-    ctx.fillStyle=tC(type); ctx.fill();
+    ctx.beginPath(); ctx.arc(x,y,r*2.8,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    // Shape
+    ctx.fillStyle=tC(type);
+    drawShape(ctx,type,x,y,r); ctx.fill();
     ctx.strokeStyle='#fff'; ctx.lineWidth=2/scale; ctx.stroke();
+    // Icon
+    if(areaR>=8){
+      ctx.font=`${r*0.9}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.globalAlpha=0.85; ctx.fillText(tE(type),x,y); ctx.globalAlpha=1; ctx.textBaseline='alphabetic';
+    }
     // Name label
     const name=document.getElementById('f-name')?.value||'New Location';
     ctx.font=`700 ${11/scale}px "Segoe UI",sans-serif`;
     const tw=ctx.measureText(name).width;
+    const labelY=y-r-8/scale;
     ctx.fillStyle='rgba(11,12,20,.9)';
-    rr(ctx,x-tw/2-5/scale,y-28/scale,tw+10/scale,16/scale,4/scale); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.fillText(name,x,y-15/scale);
+    rr(ctx,x-tw/2-5/scale,labelY-11/scale,tw+10/scale,16/scale,4/scale); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.fillText(name,x,labelY);
     // Crosshair
     ctx.strokeStyle='rgba(255,255,255,.2)'; ctx.lineWidth=1/scale; ctx.setLineDash([4/scale,4/scale]);
     ctx.beginPath(); ctx.moveTo(P,y); ctx.lineTo(W-P,y); ctx.stroke();
@@ -359,6 +389,30 @@ function redraw(){
 // Update dot when name or type changes
 document.getElementById('f-name').addEventListener('input',redraw);
 document.getElementById('f-type').addEventListener('change',redraw);
+if(document.getElementById('f-area')) document.getElementById('f-area').addEventListener('change',redraw);
+
+function drawShape(ctx, type, x, y, r) {
+  ctx.beginPath();
+  switch(type) {
+    case 'shop':       poly(ctx,x,y,r,5,-Math.PI/2);         break;
+    case 'restaurant': poly(ctx,x,y,r,6,-Math.PI/6);         break;
+    case 'entrance':   arrow(ctx,x,y,r);                      break;
+    case 'lift':       rrShape(ctx,x,y,r*.95,r*.95,r*.3);    break;
+    case 'escalator':  poly(ctx,x,y,r,3,-Math.PI/2);         break;
+    case 'stairs':     poly(ctx,x,y,r,3,Math.PI/6);          break;
+    case 'restroom':   ctx.arc(x,y,r,0,Math.PI*2);           break;
+    case 'atm':        diamond(ctx,x,y,r*1.1,r*.85);         break;
+    case 'parking':    diamond(ctx,x,y,r*1.1,r*.85);         break;
+    case 'info':       poly(ctx,x,y,r,4,-Math.PI/4);         break;
+    case 'emergency':  star8(ctx,x,y,r,r*.5);                break;
+    default:           ctx.arc(x,y,r,0,Math.PI*2);           break;
+  }
+}
+function poly(ctx,cx,cy,r,n,startA){for(let i=0;i<n;i++){const a=startA+i*(2*Math.PI/n);i===0?ctx.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a)):ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a));}ctx.closePath();}
+function diamond(ctx,cx,cy,rx,ry){ctx.moveTo(cx,cy-ry);ctx.lineTo(cx+rx,cy);ctx.lineTo(cx,cy+ry);ctx.lineTo(cx-rx,cy);ctx.closePath();}
+function arrow(ctx,cx,cy,r){ctx.moveTo(cx+r,cy);ctx.lineTo(cx-r*.4,cy-r*.85);ctx.lineTo(cx-r*.4,cy-.25*r);ctx.lineTo(cx-r,cy-.25*r);ctx.lineTo(cx-r,cy+.25*r);ctx.lineTo(cx-r*.4,cy+.25*r);ctx.lineTo(cx-r*.4,cy+r*.85);ctx.closePath();}
+function rrShape(ctx,cx,cy,hw,hh,cr){const l=cx-hw,t=cy-hh,r2=cx+hw,b=cy+hh;ctx.moveTo(l+cr,t);ctx.lineTo(r2-cr,t);ctx.quadraticCurveTo(r2,t,r2,t+cr);ctx.lineTo(r2,b-cr);ctx.quadraticCurveTo(r2,b,r2-cr,b);ctx.lineTo(l+cr,b);ctx.quadraticCurveTo(l,b,l,b-cr);ctx.lineTo(l,t+cr);ctx.quadraticCurveTo(l,t,l+cr,t);ctx.closePath();}
+function star8(ctx,cx,cy,R,r){for(let i=0;i<8;i++){const aO=i*Math.PI/4-Math.PI/8,aI=aO+Math.PI/8;(i===0?ctx.moveTo:ctx.lineTo).call(ctx,cx+R*Math.cos(aO-Math.PI/8),cy+R*Math.sin(aO-Math.PI/8));ctx.lineTo(cx+r*Math.cos(aI),cy+r*Math.sin(aI));}ctx.closePath();}
 
 function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
 </script>

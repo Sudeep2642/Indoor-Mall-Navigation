@@ -327,6 +327,19 @@ canvas{display:block}
       <div id="cwrap">
         <canvas id="cv"></canvas>
         <div class="maphint" id="maphint">{% if current_loc %}Pick destination above{% else %}Tap a dot or search{% endif %}</div>
+        <!-- Shape Legend -->
+        <div id="map-legend" style="position:absolute;top:.65rem;right:.65rem;background:rgba(19,20,31,.92);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.5rem .65rem;z-index:10;font-size:.62rem;color:rgba(255,255,255,.6);line-height:1.8;pointer-events:none;">
+          <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.3);margin-bottom:.2rem">Shape Guide</div>
+          <div>⬠ <span style="color:#a78bfa">Shop</span></div>
+          <div>⬡ <span style="color:#fb923c">Restaurant</span></div>
+          <div>▶ <span style="color:#4ade80">Entrance</span></div>
+          <div>◻ <span style="color:#60a5fa">Lift</span></div>
+          <div>△ <span style="color:#fbbf24">Escalator / Stairs</span></div>
+          <div>◯ <span style="color:#34d399">Restroom</span></div>
+          <div>♦ <span style="color:#f472b6">ATM / Parking</span></div>
+          <div>✦ <span style="color:#ef5350">Emergency</span></div>
+          <div style="margin-top:.35rem;padding-top:.35rem;border-top:1px solid rgba(255,255,255,.06);font-size:.58rem;color:rgba(255,255,255,.3)">Size = floor area covered</div>
+        </div>
         <div id="zbtn">
           <button class="zb" onclick="doZoom(1.25)">+</button>
           <button class="zb" onclick="doZoom(0.8)">−</button>
@@ -801,7 +814,7 @@ function redraw() {
   const pathC   = routeData?.steps.map(s => s.code) || [];
 
   // Floor map image background
-  if (fl?.map_img_url) {
+  if (fl?.map_img_url && fl?.show_map !== false) {
     const img = getImg(fl.map_img_url);
     if (img.complete && img.naturalWidth) { ctx.globalAlpha=.22; ctx.drawImage(img,P,P,W-P*2,H-P*2); ctx.globalAlpha=1; }
   }
@@ -828,32 +841,69 @@ function redraw() {
     }
   }
 
-  // Location dots
+  // Location shapes
   flLocs.forEach(loc => {
     const x=tx(loc.x_pct), y=ty(loc.y_pct);
     const isF=loc.code===fromCode, isT=loc.code===toCode, isP=pathC.includes(loc.code), isJ=loc.loc_type==='junction';
     if (isJ && !isP) { ctx.beginPath(); ctx.arc(x,y,2.5/scale,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,.1)'; ctx.fill(); return; }
-    // Glow
+
+    // Base radius from area_size
+    const areaR = {'xs':4,'sm':6,'md':8,'lg':11,'xl':15}[loc.area_size||'md'] || 8;
+    const r = ((isF||isT) ? areaR+3 : isP ? areaR+1 : areaR) / scale;
+
+    // Glow halo for from/to
     if (isF||isT) {
-      const g = ctx.createRadialGradient(x,y,0,x,y,22/scale);
-      g.addColorStop(0, isF?'rgba(0,230,118,.22)':'rgba(255,107,53,.22)'); g.addColorStop(1,'transparent');
-      ctx.beginPath(); ctx.arc(x,y,22/scale,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+      const g = ctx.createRadialGradient(x,y,0,x,y,(r*2.8));
+      g.addColorStop(0, isF?'rgba(0,230,118,.25)':'rgba(255,107,53,.25)'); g.addColorStop(1,'transparent');
+      ctx.beginPath(); ctx.arc(x,y,r*2.8,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
     }
-    const r = (isF||isT) ? 9/scale : isP ? 7/scale : 5/scale;
-    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.fillStyle = isF?'#00e676': isT?'#ff6b35': isP?'#6c63ff': tC(loc.loc_type); ctx.fill();
-    if (isF||isT||isP) { ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=1.5/scale; ctx.stroke(); }
+
+    // Area size ring (XL/LG get an outer territory ring)
+    if ((loc.area_size==='xl'||loc.area_size==='lg') && !isF && !isT) {
+      const ringR = (loc.area_size==='xl' ? r*2.2 : r*1.7);
+      ctx.beginPath(); ctx.arc(x,y,ringR,0,Math.PI*2);
+      ctx.strokeStyle = tC(loc.loc_type)+'33';
+      ctx.lineWidth = (loc.area_size==='xl'?2.5:1.5)/scale;
+      ctx.setLineDash([3/scale,3/scale]);
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    // Draw shape based on type
+    const fillColor = isF?'#00e676': isT?'#ff6b35': isP?'#6c63ff': tC(loc.loc_type);
+    ctx.fillStyle = fillColor;
+    ctx.strokeStyle = (isF||isT||isP) ? 'rgba(255,255,255,.5)' : fillColor+'cc';
+    ctx.lineWidth = (isF||isT ? 2 : 1.2)/scale;
+
+    drawShape(ctx, loc.loc_type, x, y, r);
+    ctx.fill();
+    if (isF||isT||isP) ctx.stroke();
+
+    // Icon inside shape (for readability at larger sizes)
+    if (areaR >= 8) {
+      const ico = tE(loc.loc_type);
+      const ifs = Math.max(8, (r * 0.9));
+      ctx.font = `${ifs}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 0.85;
+      ctx.fillText(ico, x, y);
+      ctx.globalAlpha = 1;
+      ctx.textBaseline = 'alphabetic';
+    }
+
     // Label
     const showL = isF||isT||isP||['entrance','lift','escalator','info','atm','parking','emergency'].includes(loc.loc_type);
     if (showL) {
       const lbl = loc.name.length>16 ? loc.name.slice(0,15)+'…' : loc.name;
       const fs  = 10/scale;
       ctx.font = `${isF||isT?'700':'500'} ${fs}px "Segoe UI",sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='alphabetic';
       const tw  = ctx.measureText(lbl).width;
-      ctx.fillStyle='rgba(11,12,20,.82)';
-      rr(ctx, x-tw/2-4/scale, y-26/scale, tw+8/scale, 14/scale, 3/scale); ctx.fill();
-      ctx.fillStyle = isF?'#00e676': isT?'#ff6b35': isP?'#a5b4fc':'rgba(255,255,255,.82)';
-      ctx.textAlign='center'; ctx.fillText(lbl, x, y-15/scale);
+      const labelY = y - r - 8/scale;
+      ctx.fillStyle='rgba(11,12,20,.85)';
+      rr(ctx, x-tw/2-4/scale, labelY-11/scale, tw+8/scale, 14/scale, 3/scale); ctx.fill();
+      ctx.fillStyle = isF?'#00e676': isT?'#ff6b35': isP?'#a5b4fc':'rgba(255,255,255,.85)';
+      ctx.fillText(lbl, x, labelY);
     }
   });
 
@@ -864,6 +914,59 @@ function redraw() {
 }
 
 function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+
+// Shape-per-type:  shop=pentagon  restaurant=hexagon  entrance=arrow  lift=rounded-square
+// escalator/stairs=triangle  restroom=circle  atm/info/parking=diamond  emergency=8-point star
+function drawShape(ctx, type, x, y, r) {
+  ctx.beginPath();
+  switch(type) {
+    case 'shop':       poly(ctx,x,y,r,5,-Math.PI/2);          break;  // Pentagon ⬠
+    case 'restaurant': poly(ctx,x,y,r,6,-Math.PI/6);          break;  // Hexagon ⬡
+    case 'entrance':   arrow(ctx,x,y,r);                       break;  // Arrow ▶
+    case 'lift':       rrShape(ctx,x,y,r*0.95,r*0.95,r*0.3);  break;  // Rounded square
+    case 'escalator':  poly(ctx,x,y,r,3,-Math.PI/2);          break;  // Triangle △
+    case 'stairs':     poly(ctx,x,y,r,3, Math.PI/6);          break;  // Inverted triangle ▽
+    case 'restroom':   ctx.arc(x,y,r,0,Math.PI*2);            break;  // Circle
+    case 'atm':        diamond(ctx,x,y,r*1.1,r*0.85);         break;  // Diamond ♦
+    case 'parking':    diamond(ctx,x,y,r*1.1,r*0.85);         break;
+    case 'info':       poly(ctx,x,y,r,4,-Math.PI/4);          break;  // Square ■
+    case 'emergency':  star8(ctx,x,y,r,r*0.5);                break;  // Star ✦
+    default:           ctx.arc(x,y,r,0,Math.PI*2);            break;  // Circle fallback
+  }
+}
+function poly(ctx,cx,cy,r,n,startA){
+  for(let i=0;i<n;i++){
+    const a=startA+i*(2*Math.PI/n);
+    i===0?ctx.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a)):ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a));
+  }
+  ctx.closePath();
+}
+function diamond(ctx,cx,cy,rx,ry){
+  ctx.moveTo(cx,cy-ry); ctx.lineTo(cx+rx,cy); ctx.lineTo(cx,cy+ry); ctx.lineTo(cx-rx,cy); ctx.closePath();
+}
+function arrow(ctx,cx,cy,r){
+  // Right-pointing arrow
+  ctx.moveTo(cx+r,cy); ctx.lineTo(cx-r*.4,cy-r*.85); ctx.lineTo(cx-r*.4,cy-.25*r);
+  ctx.lineTo(cx-r,cy-.25*r); ctx.lineTo(cx-r,cy+.25*r); ctx.lineTo(cx-r*.4,cy+.25*r);
+  ctx.lineTo(cx-r*.4,cy+r*.85); ctx.closePath();
+}
+function rrShape(ctx,cx,cy,hw,hh,cr){
+  const l=cx-hw,t=cy-hh,r2=cx+hw,b=cy+hh;
+  ctx.moveTo(l+cr,t); ctx.lineTo(r2-cr,t); ctx.quadraticCurveTo(r2,t,r2,t+cr);
+  ctx.lineTo(r2,b-cr); ctx.quadraticCurveTo(r2,b,r2-cr,b);
+  ctx.lineTo(l+cr,b);  ctx.quadraticCurveTo(l,b,l,b-cr);
+  ctx.lineTo(l,t+cr);  ctx.quadraticCurveTo(l,t,l+cr,t);
+  ctx.closePath();
+}
+function star8(ctx,cx,cy,R,r){
+  for(let i=0;i<8;i++){
+    const aO=i*Math.PI/4-Math.PI/8, aI=aO+Math.PI/8;
+    (i===0?ctx.moveTo:ctx.lineTo).call(ctx,cx+R*Math.cos(aO-Math.PI/8),cy+R*Math.sin(aO-Math.PI/8));
+    ctx.lineTo(cx+r*Math.cos(aI),cy+r*Math.sin(aI));
+  }
+  ctx.closePath();
+}
+
 function tC(t){const m={shop:'#a78bfa',restaurant:'#fb923c',lift:'#60a5fa',escalator:'#fbbf24',stairs:'#fbbf24',restroom:'#34d399',entrance:'#4ade80',atm:'#f472b6',parking:'#94a3b8',info:'#67e8f9',emergency:'#f87171'};return m[t]||'#6b7280'}
 function tE(t){const m={shop:'🛍️',restaurant:'🍽️',lift:'🛗',escalator:'↗️',stairs:'🪜',restroom:'🚻',entrance:'🚪',atm:'💳',parking:'🅿️',info:'ℹ️',emergency:'🚨'};return m[t]||'📍'}
 

@@ -60,6 +60,7 @@ def navigate(request, mall_slug, from_code=None):
                 'number': f.number, 'label': f.label,
                 'has_map': bool(f.map_image),
                 'map_img_url': f.map_image.url if f.map_image else None,
+                'show_map': f.show_map_to_visitors,
             }
             for f in floors
         ]),
@@ -214,6 +215,7 @@ def add_location(request, mall_slug):
                 code=request.POST['code'].upper().replace(' ', '_'),
                 name=request.POST['name'],
                 loc_type=request.POST['loc_type'],
+                area_size=request.POST.get('area_size', 'md'),
                 description=request.POST.get('description', ''),
                 x_pct=float(request.POST.get('x_pct', 50)),
                 y_pct=float(request.POST.get('y_pct', 50)),
@@ -242,6 +244,7 @@ def add_location(request, mall_slug):
     return render(request, 'navigation/add_location.html', {
         'mall': mall, 'floors': floors,
         'type_choices': Location.TYPE_CHOICES,
+        'area_choices': Location.AREA_SIZE_CHOICES,
         'existing_locs_json': json.dumps(existing_by_floor),
     })
 
@@ -480,6 +483,7 @@ def edit_location(request, loc_id):
         try:
             loc.name      = request.POST['name']
             loc.loc_type  = request.POST['loc_type']
+            loc.area_size = request.POST.get('area_size', loc.area_size)
             loc.floor     = get_object_or_404(Floor, pk=request.POST['floor_id'])
             loc.x_pct     = float(request.POST.get('x_pct', loc.x_pct))
             loc.y_pct     = float(request.POST.get('y_pct', loc.y_pct))
@@ -492,6 +496,7 @@ def edit_location(request, loc_id):
     return render(request, 'navigation/edit_location.html', {
         'loc': loc, 'mall': loc.mall, 'floors': floors,
         'type_choices': Location.TYPE_CHOICES,
+        'area_choices': Location.AREA_SIZE_CHOICES,
     })
 
 
@@ -595,6 +600,18 @@ def update_floor_label(request, floor_id):
         floor.label = request.POST.get('label', floor.label)
         floor.save()
         messages.success(request, "Floor label updated.")
+    return redirect('mall_admin', mall_slug=floor.mall.slug)
+
+
+@login_required
+def toggle_floor_map_visibility(request, floor_id):
+    """Toggle whether the floor map background is shown to visitors (does NOT delete the image)."""
+    floor = get_object_or_404(Floor, pk=floor_id)
+    if request.method == 'POST':
+        floor.show_map_to_visitors = not floor.show_map_to_visitors
+        floor.save()
+        state = "visible" if floor.show_map_to_visitors else "hidden"
+        messages.success(request, f"Floor map for '{floor.label}' is now {state} to visitors.")
     return redirect('mall_admin', mall_slug=floor.mall.slug)
 
 

@@ -163,6 +163,7 @@ def get_all_locations_json(mall):
             'floor_number': loc.floor.number,
             'floor_label': loc.floor.label,
             'loc_type': loc.loc_type,
+            'area_size': loc.area_size,
             'x_pct': loc.x_pct,
             'y_pct': loc.y_pct,
         })

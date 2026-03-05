@@ -33,6 +33,7 @@ class Floor(models.Model):
     map_image    = models.ImageField(upload_to='floor_maps/', blank=True, null=True)
     map_width_px = models.IntegerField(default=1000)
     map_height_px= models.IntegerField(default=700)
+    show_map_to_visitors = models.BooleanField(default=True, help_text="When OFF, visitors see only nodes/connections — the floor plan image is hidden.")
 
     class Meta:
         unique_together = ('mall', 'number')
@@ -68,6 +69,14 @@ class Location(models.Model):
     x_pct         = models.FloatField(default=50)
     y_pct         = models.FloatField(default=50)
     qr_image      = models.ImageField(upload_to='qr_codes/', blank=True, null=True)
+    AREA_SIZE_CHOICES = [
+        ('xs',  'XS — Tiny (kiosk / ATM)'),
+        ('sm',  'Small (≤ 200 sq ft)'),
+        ('md',  'Medium (200–600 sq ft)'),
+        ('lg',  'Large (600–1500 sq ft)'),
+        ('xl',  'XL — Anchor (1500 sq ft +)'),
+    ]
+    area_size     = models.CharField(max_length=4, choices=AREA_SIZE_CHOICES, default='md')
     is_active     = models.BooleanField(default=True)
 
     class Meta:
