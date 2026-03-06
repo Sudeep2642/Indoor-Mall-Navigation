@@ -1,53 +1,342 @@
 {% extends 'navigation/base.html' %}
 {% block title %}Edit {{ loc.name }}{% endblock %}
 {% block content %}
-<div class="container page" style="max-width:640px">
-  <div style="font-size:.8rem;color:var(--muted);margin-bottom:.5rem"><a href="/dashboard/{{ mall.slug }}/">{{ mall.name }}</a> › Edit Location</div>
-  <h1 style="font-size:1.5rem;font-weight:800;margin-bottom:1.5rem">Edit: {{ loc.name }}</h1>
-  <div class="card">
-    <form method="post">
+<style>
+.al-wrap{display:grid;grid-template-columns:380px 1fr;gap:0;height:calc(100vh - 58px);overflow:hidden}
+@media(max-width:800px){.al-wrap{grid-template-columns:1fr;height:auto}}
+.al-panel{background:var(--surf);border-right:1px solid var(--border);overflow-y:auto;padding:1.25rem}
+.al-panel::-webkit-scrollbar{width:3px}
+.al-panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1)}
+.al-map{position:relative;overflow:hidden;background:#0b0c14;display:flex;flex-direction:column}
+@media(max-width:800px){.al-map{height:65vw;min-height:320px}}
+.al-map-top{flex-shrink:0;padding:.5rem .875rem;background:var(--surf);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap}
+.al-map-top span{font-size:.75rem;color:var(--muted)}
+.al-canvas-wrap{flex:1;position:relative;overflow:hidden;min-height:0}
+.xy-chip{display:inline-flex;align-items:center;gap:.4rem;background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);border-radius:8px;padding:.45rem .75rem;font-size:.82rem;color:#a5b4fc;font-family:monospace;cursor:pointer;transition:all .15s;width:100%;justify-content:center;margin-bottom:.35rem}
+.xy-chip.placed{background:rgba(0,230,118,.12);border-color:rgba(0,230,118,.3);color:var(--green)}
+.coord-read{position:absolute;bottom:.6rem;left:.6rem;background:rgba(19,20,31,.9);border:1px solid rgba(255,255,255,.08);padding:.28rem .6rem;border-radius:20px;font-size:.68rem;color:var(--muted);font-family:monospace;pointer-events:none;z-index:5}
+.mode-bar{display:flex;gap:.35rem;padding:.45rem .875rem;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0}
+.mdbtn{flex:1;padding:.38rem .4rem;border-radius:7px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;white-space:nowrap}
+.mdbtn.active{background:rgba(108,99,255,.2);border-color:var(--primary);color:#a5b4fc}
+.mdbtn:hover:not(.active){border-color:rgba(255,255,255,.15);color:var(--text)}
+#poly-toolbar{position:absolute;top:.6rem;right:.6rem;display:flex;flex-direction:column;gap:.35rem;z-index:10}
+.ptbtn{width:34px;height:34px;border-radius:8px;background:rgba(19,20,31,.92);border:1px solid var(--border);color:var(--text);font-size:.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.ptbtn:hover{background:rgba(108,99,255,.3);border-color:var(--primary)}
+.ptbtn.danger:hover{background:rgba(239,68,68,.3);border-color:#ef4444}
+#poly-status{position:absolute;top:.6rem;left:.6rem;background:rgba(19,20,31,.92);border:1px solid rgba(108,99,255,.3);border-radius:8px;padding:.3rem .6rem;font-size:.68rem;color:#a5b4fc;pointer-events:none;z-index:5;display:none}
+#poly-status.active{display:block}
+#poly-status.done{border-color:rgba(0,230,118,.4);color:var(--green)}
+#poly-status.warn{border-color:rgba(255,193,7,.4);color:#fbbf24}
+.poly-info{background:rgba(108,99,255,.07);border:1px solid rgba(108,99,255,.2);border-radius:8px;padding:.5rem .7rem;font-size:.74rem;color:var(--muted);margin-top:.35rem}
+.poly-info.has-poly{background:rgba(0,230,118,.07);border-color:rgba(0,230,118,.2);color:#86efac}
+</style>
+
+<div class="al-wrap">
+
+  <!-- FORM PANEL -->
+  <div class="al-panel">
+    <div style="font-size:.75rem;color:var(--muted);margin-bottom:.5rem">
+      <a href="/dashboard/{{ mall.slug }}/">{{ mall.name }}</a> › Edit Location
+    </div>
+    <h1 style="font-size:1.2rem;font-weight:800;margin-bottom:1rem">✏️ Edit: {{ loc.name }}</h1>
+
+    <form method="post" id="loc-form">
       {% csrf_token %}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-        <div class="form-group" style="grid-column:1/-1">
-          <label>Location Name</label>
-          <input type="text" name="name" class="form-control" value="{{ loc.name }}" required>
-        </div>
+
+      <div class="form-group">
+        <label>Location Name</label>
+        <input type="text" name="name" id="f-name" class="form-control" value="{{ loc.name }}" required>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
         <div class="form-group">
           <label>Type</label>
-          <select name="loc_type" class="form-control">
+          <select name="loc_type" id="f-type" class="form-control" onchange="redraw()">
             {% for val,label in type_choices %}<option value="{{ val }}" {% if val == loc.loc_type %}selected{% endif %}>{{ label }}</option>{% endfor %}
           </select>
         </div>
         <div class="form-group">
           <label>Area Size</label>
-          <select name="area_size" class="form-control">
+          <select name="area_size" id="f-area" class="form-control" onchange="redraw()">
             {% for val,label in area_choices %}<option value="{{ val }}" {% if val == loc.area_size %}selected{% endif %}>{{ label }}</option>{% endfor %}
           </select>
         </div>
-        <div class="form-group">
-          <label>Floor</label>
-          <select name="floor_id" class="form-control">
-            {% for fl in floors %}<option value="{{ fl.id }}" {% if fl.id == loc.floor_id %}selected{% endif %}>{{ fl.label }}</option>{% endfor %}
-          </select>
+      </div>
+
+      <div class="form-group">
+        <label>Floor</label>
+        <select name="floor_id" id="f-floor" class="form-control" onchange="onFloorChange()">
+          {% for fl in floors %}<option value="{{ fl.id }}" data-num="{{ fl.number }}" data-img="{% if fl.map_image %}{{ fl.map_image.url }}{% endif %}" {% if fl.id == loc.floor_id %}selected{% endif %}>{{ fl.label }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Node Position</label>
+        <div class="xy-chip placed" id="xy-chip">
+          <span>📍</span>
+          <span id="xy-label">X: {{ loc.x_pct }}%  Y: {{ loc.y_pct }}%</span>
         </div>
-        <div class="form-group">
-          <label>X %</label>
-          <input type="number" name="x_pct" class="form-control" value="{{ loc.x_pct }}" min="0" max="100" step="0.5">
-        </div>
-        <div class="form-group">
-          <label>Y %</label>
-          <input type="number" name="y_pct" class="form-control" value="{{ loc.y_pct }}" min="0" max="100" step="0.5">
-        </div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label>Description</label>
-          <textarea name="description" class="form-control" rows="2">{{ loc.description }}</textarea>
+        <input type="hidden" name="x_pct" id="f-x" value="{{ loc.x_pct }}">
+        <input type="hidden" name="y_pct" id="f-y" value="{{ loc.y_pct }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.35rem">
+          <div>
+            <label style="font-size:.68rem;color:var(--muted)">X %</label>
+            <input type="number" id="v-x" class="form-control" value="{{ loc.x_pct }}" min="0" max="100" step="0.5" oninput="syncXY()" style="font-size:.82rem">
+          </div>
+          <div>
+            <label style="font-size:.68rem;color:var(--muted)">Y %</label>
+            <input type="number" id="v-y" class="form-control" value="{{ loc.y_pct }}" min="0" max="100" step="0.5" oninput="syncXY()" style="font-size:.82rem">
+          </div>
         </div>
       </div>
-      <div style="display:flex;gap:.75rem;margin-top:.5rem">
+
+      <div class="form-group">
+        <label>Boundary Polygon</label>
+        <div class="poly-info" id="poly-info">Loading…</div>
+        <input type="hidden" name="area_polygon" id="f-polygon" value="{{ area_polygon_json }}">
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <textarea name="description" class="form-control" rows="2">{{ loc.description }}</textarea>
+      </div>
+
+      <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:.6rem .8rem;margin-bottom:1rem;font-size:.74rem;color:var(--muted);line-height:1.7">
+        <strong style="color:var(--text)">💡 Map controls</strong><br>
+        <b style="color:#a5b4fc">Place Node</b> — click to reposition the dot<br>
+        <b style="color:#fb923c">Draw Boundary</b> — click to add vertices · double-click to close · drag vertices to adjust<br>
+        Right-click drag to pan · Scroll to zoom
+      </div>
+
+      <div style="display:flex;gap:.75rem">
         <button type="submit" class="btn btn-primary">Save Changes</button>
         <a href="/dashboard/{{ mall.slug }}/" class="btn btn-ghost">Cancel</a>
       </div>
     </form>
   </div>
+
+  <!-- MAP -->
+  <div class="al-map">
+    <div class="al-map-top">
+      <span id="map-floor-label">{{ loc.floor.label }}</span>
+      <span id="map-top-hint">Mode: Place Node</span>
+    </div>
+    <div class="mode-bar">
+      <button class="mdbtn active" id="btn-node" onclick="setMode('node')">📍 Place Node</button>
+      <button class="mdbtn" id="btn-poly" onclick="setMode('poly')">✏️ Draw Boundary</button>
+      <button class="mdbtn" id="btn-pan"  onclick="setMode('pan')">🤚 Pan / Zoom</button>
+    </div>
+    <div class="al-canvas-wrap" id="cv-wrap">
+      <canvas id="cv"></canvas>
+      <div class="coord-read" id="coord-read">X: — Y: —</div>
+      <div id="poly-status">0 points</div>
+      <div id="poly-toolbar" style="display:none">
+        <button class="ptbtn" title="Undo last point" onclick="polyUndo()">↩</button>
+        <button class="ptbtn" title="Close polygon" onclick="polyClose()">⬡</button>
+        <button class="ptbtn danger" title="Clear polygon" onclick="polyClear()">🗑</button>
+      </div>
+    </div>
+  </div>
+
 </div>
+
+<script>
+// Floor map images
+const floorImgs = {
+  {% for fl in floors %}
+  "{{ fl.id }}": "{% if fl.map_image %}{{ fl.map_image.url }}{% endif %}",
+  {% endfor %}
+};
+
+const cv  = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+let bgImg = null, placed = true;
+let px = {{ loc.x_pct }}, py = {{ loc.y_pct }};
+let scale = 1, panX = 0, panY = 0;
+let isPanning = false, lastPan = {x:0,y:0}, panMoved = false;
+
+// Load existing polygon
+const rawPoly = {{ area_polygon_json }};
+let polyPts   = rawPoly.map(p => ({xp:p[0], yp:p[1]}));
+let polyClosed = polyPts.length >= 3;
+let dragging = null, hoverVtx = null, mode = 'node', lastClick = 0;
+
+function resize(){
+  const w = document.getElementById('cv-wrap');
+  cv.width = w.clientWidth; cv.height = w.clientHeight; redraw();
+}
+window.addEventListener('resize', resize);
+
+function loadBg(url){ bgImg = new Image(); bgImg.onload = redraw; bgImg.src = url; }
+
+// Load current floor map
+const sel0 = document.getElementById('f-floor');
+const selOpt0 = sel0?.options[sel0.selectedIndex];
+const initImg = selOpt0?.dataset?.img || Object.values(floorImgs)[0];
+if(initImg) loadBg(initImg);
+resize();
+updatePolyStatus();
+
+function onFloorChange(){
+  const sel = document.getElementById('f-floor');
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('map-floor-label').textContent = opt.text;
+  const img = floorImgs[sel.value];
+  if(img) loadBg(img); else { bgImg = null; redraw(); }
+}
+
+function setMode(m){
+  mode = m;
+  ['node','poly','pan'].forEach(x => document.getElementById('btn-'+x).classList.toggle('active', x===m));
+  const hints = {node:'Click map to reposition node', poly:'Click to add vertices · Double-click to close · Drag to adjust', pan:'Drag to pan · Scroll to zoom'};
+  document.getElementById('map-top-hint').textContent = 'Mode: ' + hints[m];
+  const tb = document.getElementById('poly-toolbar');
+  const st = document.getElementById('poly-status');
+  if(m==='poly'){ tb.style.display='flex'; st.classList.add('active'); cv.style.cursor='crosshair'; }
+  else { tb.style.display='none'; st.classList.remove('active'); cv.style.cursor=m==='pan'?'grab':'crosshair'; }
+  updatePolyStatus(); redraw();
+}
+
+function updatePolyStatus(){
+  const s = document.getElementById('poly-status');
+  if(polyClosed){ s.textContent=`✓ ${polyPts.length} vertices — drag to adjust`; s.className='done active'; }
+  else if(polyPts.length===0){ s.textContent='Click to start drawing'; s.className='active'; }
+  else if(polyPts.length<3){ s.textContent=`${polyPts.length} pt — need 3+`; s.className='warn active'; }
+  else { s.textContent=`${polyPts.length} pts — double-click or ⬡ to close`; s.className='active'; }
+  const info = document.getElementById('poly-info');
+  if(polyClosed && polyPts.length>=3){ info.textContent=`✓ ${polyPts.length}-vertex polygon`; info.className='poly-info has-poly'; }
+  else if(polyPts.length>0){ info.textContent=`${polyPts.length} point(s) — polygon not closed`; info.className='poly-info'; }
+  else { info.textContent='No polygon — switch to Draw Boundary mode to draw one'; info.className='poly-info'; }
+  document.getElementById('f-polygon').value = (polyClosed && polyPts.length>=3)
+    ? JSON.stringify(polyPts.map(p=>[p.xp,p.yp])) : '[]';
+}
+
+function syncXY(){
+  const x=parseFloat(document.getElementById('v-x').value)||px;
+  const y=parseFloat(document.getElementById('v-y').value)||py;
+  px=Math.max(0,Math.min(100,x)); py=Math.max(0,Math.min(100,y));
+  document.getElementById('f-x').value=px; document.getElementById('f-y').value=py;
+  placed=true; updateChip(); redraw();
+}
+function updateChip(){
+  document.getElementById('xy-label').textContent=`X: ${px.toFixed(1)}%  Y: ${py.toFixed(1)}%`;
+}
+
+function txW(p){return 40+(p/100)*(cv.width-80);}
+function tyW(p){return 40+(p/100)*(cv.height-80);}
+function screenToWorld(e){const r=cv.getBoundingClientRect();return{wx:(e.clientX-r.left-panX)/scale,wy:(e.clientY-r.top-panY)/scale};}
+function screenPct(e){const{wx,wy}=screenToWorld(e);return{xp:Math.max(0,Math.min(100,wx/cv.width*100)),yp:Math.max(0,Math.min(100,wy/cv.height*100))};}
+function vtxNear(e){const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;for(let i=0;i<polyPts.length;i++){const cx=txW(polyPts[i].xp)*scale+panX,cy=tyW(polyPts[i].yp)*scale+panY;if(Math.hypot(cx-mx,cy-my)<10)return i;}return null;}
+
+function polyUndo(){if(polyClosed){polyClosed=false;}else{polyPts.pop();}updatePolyStatus();redraw();}
+function polyClose(){if(polyPts.length>=3){polyClosed=true;updatePolyStatus();redraw();}}
+function polyClear(){polyPts=[];polyClosed=false;updatePolyStatus();redraw();}
+
+cv.addEventListener('contextmenu', e=>e.preventDefault());
+cv.addEventListener('mousedown', e=>{
+  if(e.button===2||mode==='pan'){isPanning=true;lastPan={x:e.clientX,y:e.clientY};panMoved=false;cv.style.cursor='grabbing';return;}
+  if(mode==='poly'){const vi=vtxNear(e);if(vi!==null){dragging=vi;return;}}
+});
+cv.addEventListener('mousemove', e=>{
+  const{xp,yp}=screenPct(e);
+  document.getElementById('coord-read').textContent=`X: ${xp.toFixed(1)}%  Y: ${yp.toFixed(1)}%`;
+  if(isPanning){const dx=e.clientX-lastPan.x,dy=e.clientY-lastPan.y;if(Math.abs(dx)>2||Math.abs(dy)>2)panMoved=true;panX+=dx;panY+=dy;lastPan={x:e.clientX,y:e.clientY};redraw();return;}
+  if(mode==='poly'){if(dragging!==null){polyPts[dragging]={xp,yp};updatePolyStatus();redraw();return;}hoverVtx=vtxNear(e);cv.style.cursor=hoverVtx!==null?'move':'crosshair';redraw();}
+});
+cv.addEventListener('mouseup', e=>{
+  if(isPanning){isPanning=false;cv.style.cursor=mode==='pan'?'grab':'crosshair';return;}
+  if(dragging!==null){dragging=null;return;}
+  const now=Date.now(),dbl=(now-lastClick)<350;lastClick=now;
+  if(mode==='poly'&&!panMoved){
+    if(dbl){if(polyPts.length>=3){polyClosed=true;updatePolyStatus();redraw();}return;}
+    if(!polyClosed){const{xp,yp}=screenPct(e);polyPts.push({xp,yp});updatePolyStatus();redraw();}
+    return;
+  }
+  if(mode==='node'&&!panMoved){
+    const{xp,yp}=screenPct(e);
+    px=parseFloat(xp.toFixed(1));py=parseFloat(yp.toFixed(1));
+    document.getElementById('f-x').value=px;document.getElementById('f-y').value=py;
+    document.getElementById('v-x').value=px;document.getElementById('v-y').value=py;
+    placed=true;updateChip();redraw();
+  }
+  panMoved=false;
+});
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();const f=e.deltaY<0?1.12:.9;
+  const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  scale=Math.max(.3,Math.min(6,scale*f));panX=mx-(mx-panX)*f;panY=my-(my-panY)*f;redraw();
+},{passive:false});
+
+function redraw(){
+  const W=cv.width,H=cv.height;if(!W||!H)return;
+  const P=40;
+  ctx.clearRect(0,0,W,H);ctx.save();ctx.translate(panX,panY);ctx.scale(scale,scale);
+  ctx.fillStyle='#0b0c14';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=1/scale;
+  for(let x=0;x<W;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  if(bgImg&&bgImg.complete&&bgImg.naturalWidth){ctx.globalAlpha=.28;ctx.drawImage(bgImg,P,P,W-P*2,H-P*2);ctx.globalAlpha=1;}
+  const tx=xp=>P+(xp/100)*(W-P*2);
+  const ty=yp=>P+(yp/100)*(H-P*2);
+
+  const type=document.getElementById('f-type')?.value||'shop';
+  const color=tC(type);
+
+  // Polygon
+  if(polyPts.length>0){
+    if(polyClosed){
+      ctx.beginPath();polyPts.forEach((p,i)=>{i===0?ctx.moveTo(tx(p.xp),ty(p.yp)):ctx.lineTo(tx(p.xp),ty(p.yp));});ctx.closePath();
+      ctx.fillStyle=color+'28';ctx.fill();
+      ctx.strokeStyle=color+'cc';ctx.lineWidth=1.8/scale;ctx.setLineDash([]);ctx.stroke();
+    } else {
+      ctx.beginPath();polyPts.forEach((p,i)=>{i===0?ctx.moveTo(tx(p.xp),ty(p.yp)):ctx.lineTo(tx(p.xp),ty(p.yp));});
+      ctx.strokeStyle=color+'99';ctx.lineWidth=1.5/scale;ctx.setLineDash([4/scale,3/scale]);ctx.stroke();ctx.setLineDash([]);
+    }
+    polyPts.forEach((p,i)=>{
+      const x=tx(p.xp),y=ty(p.yp),isHov=hoverVtx===i,isDrag=dragging===i;
+      ctx.beginPath();ctx.arc(x,y,(isHov||isDrag?6:4)/scale,0,Math.PI*2);
+      ctx.fillStyle=isDrag?'#fff':isHov?color:'rgba(255,255,255,.9)';ctx.fill();
+      ctx.strokeStyle=color;ctx.lineWidth=1.5/scale;ctx.stroke();
+      if(i===0&&!polyClosed&&polyPts.length>=3){
+        ctx.beginPath();ctx.arc(x,y,8/scale,0,Math.PI*2);
+        ctx.strokeStyle=color+'88';ctx.lineWidth=1/scale;ctx.setLineDash([2/scale,2/scale]);ctx.stroke();ctx.setLineDash([]);
+      }
+    });
+  }
+
+  // Node
+  if(placed){
+    const x=tx(px),y=ty(py);
+    const areaSel=document.getElementById('f-area')?.value||'md';
+    const areaR={'xs':4,'sm':6,'md':8,'lg':11,'xl':15}[areaSel]||8;
+    const r=(areaR+2)/scale;
+    const g=ctx.createRadialGradient(x,y,0,x,y,r*2.8);g.addColorStop(0,color+'55');g.addColorStop(1,'transparent');
+    ctx.beginPath();ctx.arc(x,y,r*2.8,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+    ctx.fillStyle=color;drawShape(ctx,type,x,y,r);ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=2/scale;ctx.stroke();
+    if(areaR>=8){ctx.font=`${r*0.9}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.globalAlpha=.85;ctx.fillText(tE(type),x,y);ctx.globalAlpha=1;ctx.textBaseline='alphabetic';}
+    const name=document.getElementById('f-name')?.value||'{{ loc.name }}';
+    const fs=11/scale;ctx.font=`700 ${fs}px "Segoe UI",sans-serif`;
+    const tw=ctx.measureText(name).width,labelY=y-r-8/scale;
+    ctx.fillStyle='rgba(11,12,20,.9)';rr(ctx,x-tw/2-5/scale,labelY-11/scale,tw+10/scale,16/scale,4/scale);ctx.fill();
+    ctx.fillStyle='#fff';ctx.textAlign='center';ctx.fillText(name,x,labelY);
+  }
+  ctx.restore();
+}
+
+document.getElementById('f-name').addEventListener('input', redraw);
+document.getElementById('f-type').addEventListener('change', redraw);
+document.getElementById('f-area').addEventListener('change', redraw);
+
+function drawShape(ctx,type,x,y,r){ctx.beginPath();switch(type){case 'shop':poly(ctx,x,y,r,5,-Math.PI/2);break;case 'restaurant':poly(ctx,x,y,r,6,-Math.PI/6);break;case 'entrance':arrow(ctx,x,y,r);break;case 'lift':rrShape(ctx,x,y,r*.95,r*.95,r*.3);break;case 'escalator':poly(ctx,x,y,r,3,-Math.PI/2);break;case 'stairs':poly(ctx,x,y,r,3,Math.PI/6);break;case 'restroom':ctx.arc(x,y,r,0,Math.PI*2);break;case 'atm':diamond(ctx,x,y,r*1.1,r*.85);break;case 'parking':diamond(ctx,x,y,r*1.1,r*.85);break;case 'info':poly(ctx,x,y,r,4,-Math.PI/4);break;case 'emergency':star8(ctx,x,y,r,r*.5);break;default:ctx.arc(x,y,r,0,Math.PI*2);break;}}
+function poly(ctx,cx,cy,r,n,a){for(let i=0;i<n;i++){const t=a+i*(2*Math.PI/n);i===0?ctx.moveTo(cx+r*Math.cos(t),cy+r*Math.sin(t)):ctx.lineTo(cx+r*Math.cos(t),cy+r*Math.sin(t));}ctx.closePath();}
+function diamond(ctx,cx,cy,rx,ry){ctx.moveTo(cx,cy-ry);ctx.lineTo(cx+rx,cy);ctx.lineTo(cx,cy+ry);ctx.lineTo(cx-rx,cy);ctx.closePath();}
+function arrow(ctx,cx,cy,r){ctx.moveTo(cx+r,cy);ctx.lineTo(cx-r*.4,cy-r*.85);ctx.lineTo(cx-r*.4,cy-.25*r);ctx.lineTo(cx-r,cy-.25*r);ctx.lineTo(cx-r,cy+.25*r);ctx.lineTo(cx-r*.4,cy+.25*r);ctx.lineTo(cx-r*.4,cy+r*.85);ctx.closePath();}
+function rrShape(ctx,cx,cy,hw,hh,cr){const l=cx-hw,t=cy-hh,r2=cx+hw,b=cy+hh;ctx.moveTo(l+cr,t);ctx.lineTo(r2-cr,t);ctx.quadraticCurveTo(r2,t,r2,t+cr);ctx.lineTo(r2,b-cr);ctx.quadraticCurveTo(r2,b,r2-cr,b);ctx.lineTo(l+cr,b);ctx.quadraticCurveTo(l,b,l,b-cr);ctx.lineTo(l,t+cr);ctx.quadraticCurveTo(l,t,l+cr,t);ctx.closePath();}
+function star8(ctx,cx,cy,R,r){for(let i=0;i<8;i++){const aO=i*Math.PI/4-Math.PI/8,aI=aO+Math.PI/8;(i===0?ctx.moveTo:ctx.lineTo).call(ctx,cx+R*Math.cos(aO-Math.PI/8),cy+R*Math.sin(aO-Math.PI/8));ctx.lineTo(cx+r*Math.cos(aI),cy+r*Math.sin(aI));}ctx.closePath();}
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+function tC(t){const m={shop:'#a78bfa',restaurant:'#fb923c',lift:'#60a5fa',escalator:'#fbbf24',stairs:'#fbbf24',restroom:'#34d399',entrance:'#4ade80',atm:'#f472b6',parking:'#94a3b8',info:'#67e8f9',emergency:'#f87171',junction:'#4b5563'};return m[t]||'#6b7280'}
+function tE(t){const m={shop:'🛍️',restaurant:'🍽️',lift:'🛗',escalator:'↗️',stairs:'🪜',restroom:'🚻',entrance:'🚪',atm:'💳',parking:'🅿️',info:'ℹ️',emergency:'🚨'};return m[t]||'📍'}
+</script>
 {% endblock %}

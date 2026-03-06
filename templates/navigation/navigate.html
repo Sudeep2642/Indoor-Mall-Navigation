@@ -847,6 +847,23 @@ function redraw() {
     const isF=loc.code===fromCode, isT=loc.code===toCode, isP=pathC.includes(loc.code), isJ=loc.loc_type==='junction';
     if (isJ && !isP) { ctx.beginPath(); ctx.arc(x,y,2.5/scale,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,.1)'; ctx.fill(); return; }
 
+    // Draw polygon boundary if present
+    if (loc.area_polygon && loc.area_polygon.length >= 3) {
+      const pcolor = isF?'#00e676': isT?'#ff6b35': isP?'#6c63ff': tC(loc.loc_type);
+      ctx.beginPath();
+      loc.area_polygon.forEach((pt,i) => {
+        const px2=tx(pt[0]), py2=ty(pt[1]);
+        i===0 ? ctx.moveTo(px2,py2) : ctx.lineTo(px2,py2);
+      });
+      ctx.closePath();
+      ctx.fillStyle = pcolor + (isF||isT||isP ? '22' : '18');
+      ctx.fill();
+      ctx.strokeStyle = pcolor + (isF||isT||isP ? '99' : '44');
+      ctx.lineWidth = (isF||isT||isP ? 1.5 : 1) / scale;
+      ctx.setLineDash([]);
+      ctx.stroke();
+    }
+
     // Base radius from area_size
     const areaR = {'xs':4,'sm':6,'md':8,'lg':11,'xl':15}[loc.area_size||'md'] || 8;
     const r = ((isF||isT) ? areaR+3 : isP ? areaR+1 : areaR) / scale;

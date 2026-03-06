@@ -77,6 +77,9 @@ class Location(models.Model):
         ('xl',  'XL — Anchor (1500 sq ft +)'),
     ]
     area_size     = models.CharField(max_length=4, choices=AREA_SIZE_CHOICES, default='md')
+    # Polygon boundary: list of [x_pct, y_pct] points drawn by admin on the map
+    # e.g. [[10.5, 20.0], [30.2, 20.0], [30.2, 45.1], [10.5, 45.1]]
+    area_polygon  = models.JSONField(default=list, blank=True)
     is_active     = models.BooleanField(default=True)
 
     class Meta:
